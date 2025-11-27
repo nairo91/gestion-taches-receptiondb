@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chantiers - Gestion des tâches</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Gestion des tâches chantiers</h1>
+      <div class="user-info">
+        Connecté en tant que
+        <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+        (<%= currentUser.email %>)
+        <a href="/logout">Déconnexion</a>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2>Chantiers</h2>
+        <% if (!chantiers.length) { %>
+          <p>Aucun chantier dans la base.</p>
+        <% } else { %>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nom</th>
+                <th>Créé le</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% chantiers.forEach(c => { %>
+                <tr>
+                  <td><%= c.id %></td>
+                  <td><%= c.display_name %></td>
+                  <td><%= c.created_at ? c.created_at.toISOString().slice(0,10) : '' %></td>
+                  <td>
+                    <a href="/chantiers/<%= c.id %>/taches">Suivi des tâches</a>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+
+        <p>
+          <a class="btn" href="/import">Importer un fichier Excel de tâches</a>
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

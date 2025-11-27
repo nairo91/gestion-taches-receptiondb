@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Import Excel - Gestion des tâches</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Import Excel - Tâches chantiers</h1>
+      <div class="user-info">
+        Connecté en tant que
+        <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+        (<%= currentUser.email %>)
+        <a href="/logout">Déconnexion</a>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+
+        <% if (error) { %>
+          <div class="alert"><%= error %></div>
+        <% } %>
+        <% if (message) { %>
+          <div class="success"><%= message %></div>
+        <% } %>
+
+        <h2>Importer un fichier Excel de tâches</h2>
+
+        <form method="post" action="/import" enctype="multipart/form-data" class="import-form">
+          <label>Chantier
+            <select name="chantier_id" required>
+              <option value="">-- Choisir un chantier --</option>
+              <% chantiers.forEach(c => { %>
+                <option value="<%= c.id %>"><%= c.display_name %> (#<%= c.id %>)</option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>Fichier Excel
+            <input type="file" name="fichier" accept=".xlsx" required />
+          </label>
+
+          <p class="help">
+            Format attendu (ligne d'entête) :<br />
+            <strong>A:</strong> Nom de l'étage (floor_name)<br />
+            <strong>B:</strong> Nom de la pièce (room_name)<br />
+            <strong>C:</strong> Lot<br />
+            <strong>D:</strong> Tâche<br />
+            Les étages et pièces doivent déjà exister dans la base pour le chantier sélectionné.
+          </p>
+
+          <button type="submit" class="btn">Importer</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

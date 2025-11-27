@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Suivi des tâches - <%= chantier.display_name %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Suivi des tâches - <%= chantier.display_name %></h1>
+      <div class="user-info">
+        Connecté en tant que
+        <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+        (<%= currentUser.email %>)
+        <a href="/logout">Déconnexion</a>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+
+        <h2>Filtres</h2>
+        <form method="get" class="filters">
+          <label>Étage
+            <select name="floor">
+              <option value="">Tous</option>
+              <% floors.forEach(f => { %>
+                <option value="<%= f.id %>" <%= String(filters.floor) === String(f.id) ? 'selected' : '' %>><%= f.name %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>Pièce
+            <select name="room">
+              <option value="">Toutes</option>
+              <% rooms.forEach(r => { %>
+                <option value="<%= r.id %>" <%= String(filters.room) === String(r.id) ? 'selected' : '' %>><%= r.floor_name %> - <%= r.name %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>Lot
+            <input type="text" name="lot" value="<%= filters.lot %>" />
+          </label>
+
+          <label>Statut
+            <input type="text" name="status" value="<%= filters.status %>" placeholder="ouvert, terminé..." />
+          </label>
+
+          <button type="submit" class="btn">Filtrer</button>
+          <a href="/chantiers/<%= chantier.id %>/taches" class="btn btn-secondary">Réinitialiser</a>
+        </form>
+
+        <h2>Liste des tâches (interventions)</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Étage</th>
+              <th>Pièce</th>
+              <th>Lot</th>
+              <th>Tâche</th>
+              <th>Statut</th>
+              <th>Personne / Action</th>
+              <th>Créée le</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!interventions.length) { %>
+              <tr>
+                <td colspan="8">Aucune intervention pour ce chantier (ou filtre trop restrictif).</td>
+              </tr>
+            <% } %>
+            <% interventions.forEach(i => { %>
+              <tr class="<%= i.status === 'terminé' ? 'done' : '' %>">
+                <td><%= i.floor_name || i.old_floor_name %></td>
+                <td><%= i.room_name || i.old_room_name %></td>
+                <td><%= i.lot %></td>
+                <td><%= i.task %></td>
+                <td><%= i.status %></td>
+                <td>
+                  <strong><%= i.person %></strong><br />
+                  <small><%= i.action %></small>
+                </td>
+                <td><%= i.created_at ? i.created_at.toISOString().slice(0,10) : '' %></td>
+                <td>
+                  <% if (i.status !== 'terminé') { %>
+                    <form method="post" action="/interventions/<%= i.id %>/done" class="inline-form">
+                      <button type="submit" class="btn btn-small">Marquer fait</button>
+                    </form>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+
+        <h2>Ajouter une intervention manuellement</h2>
+        <form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
+          <label>Étage
+            <select name="floor_id" required>
+              <% floors.forEach(f => { %>
+                <option value="<%= f.id %>"><%= f.name %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>Pièce
+            <select name="room_id" required>
+              <% rooms.forEach(r => { %>
+                <option value="<%= r.id %>"><%= r.floor_name %> - <%= r.name %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>Lot
+            <input type="text" name="lot" required />
+          </label>
+
+          <label>Tâche
+            <input type="text" name="task" required />
+          </label>
+
+          <button type="submit" class="btn">Ajouter</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

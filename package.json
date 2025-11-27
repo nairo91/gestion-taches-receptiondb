@@ -1,0 +1,18 @@
+{
+  "name": "gestion-taches-receptiondb",
+  "version": "1.0.0",
+  "description": "Application de gestion des tâches basée sur la base reception-db (chantiers / floors / rooms / interventions)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "ejs": "^3.1.9",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.0",
+    "express-session": "^1.17.3",
+    "multer": "1.4.5-lts.1",
+    "pg": "^8.11.3"
+  }
+}
