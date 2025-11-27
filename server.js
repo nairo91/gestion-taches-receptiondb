@@ -29,6 +29,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+
+// ----- SESSION ----- //
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'secret',
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+
 // ----- AUTHENTIFICATION VIA CSV ----- //
 
 const USERS_CSV_PATH =
