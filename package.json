@@ -1,7 +1,7 @@
 {
   "name": "gestion-taches-receptiondb",
-  "version": "1.0.0",
-  "description": "Application de gestion des tâches basée sur la base reception-db (chantiers / floors / rooms / interventions)",
+  "version": "2.0.0",
+  "description": "Application de gestion des tâches basée sur reception-db avec workflow A FAIRE / EN COURS / TERMINÉ et choix multiples.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

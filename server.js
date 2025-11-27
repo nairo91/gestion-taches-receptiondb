@@ -12,11 +12,11 @@ const app = express();
 // ----- CONFIG BDD (reception-db) ----- //
 const receptionPool = new Pool({
   connectionString: process.env.RECEPTION_DB_URL,
-  ssl: process.env.DB_SSL === 'true'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl:
+    process.env.DB_SSL === 'true'
+      ? { rejectUnauthorized: false }
+      : false,
 });
-
 
 // ----- CONFIG UPLOAD ----- //
 const upload = multer({ dest: path.join(__dirname, 'uploads') });
@@ -28,21 +28,6 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-// ----- SESSION ----- //
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'secret',
-    resave: false,
-    saveUninitialized: false,
-  })
-);
-
-// rendre l'utilisateur dispo dans les vues
-app.use((req, res, next) => {
-  res.locals.currentUser = req.session.user || null;
-  next();
-});
 
 // ----- AUTHENTIFICATION VIA CSV ----- //
 
@@ -102,6 +87,13 @@ function requireAuth(req, res, next) {
   }
   next();
 }
+
+// mettre l'utilisateur courant + la liste des utilisateurs dispo dans les vues
+app.use((req, res, next) => {
+  res.locals.currentUser = req.session.user || null;
+  res.locals.usersList = USERS; // pour les choix multiples "Qui ?"
+  next();
+});
 
 // ----- ROUTES AUTH ----- //
 
@@ -249,70 +241,135 @@ app.get('/chantiers/:id/taches', async (req, res) => {
   });
 });
 
-// Marquer une intervention comme "faite"
-app.post('/interventions/:id/done', async (req, res) => {
+// Changer le statut d'une intervention (A FAIRE / EN COURS / TERMINÉ)
+app.post('/interventions/:id/status', async (req, res) => {
   const id = req.params.id;
-  const user = req.session.user;
+  const { new_status, date, persons } = req.body;
+  const actor = req.session.user;
+
+  const allowed = ['a faire', 'en cours', 'terminé'];
+  if (!allowed.includes(new_status)) {
+    return res.status(400).send('Statut invalide');
+  }
+
+  let personsArray = [];
+  if (Array.isArray(persons)) {
+    personsArray = persons.filter((p) => p && p.trim().length > 0);
+  } else if (typeof persons === 'string' && persons.trim().length > 0) {
+    personsArray = [persons.trim()];
+  }
+
+  // si personne choisie, on utilise la sélection,
+  // sinon on met l'utilisateur connecté
+  if (!personsArray.length) {
+    const name = `${actor.prenom || ''} ${actor.nom || ''}`.trim();
+    personsArray = [name || actor.email];
+  }
+
+  const personsText = personsArray.join(', ');
+
+  const dateText =
+    (date && date.trim().length > 0 ? date.trim() : new Date().toISOString().slice(0, 10));
+
+  let actionText = '';
+  if (new_status === 'a faire') {
+    actionText = `Réinitialisé le ${dateText} par ${actor.prenom || ''} ${actor.nom || ''}`.trim();
+  } else if (new_status === 'en cours') {
+    actionText = `En cours depuis le ${dateText} (par ${actor.prenom || ''} ${actor.nom || ''})`.trim();
+  } else if (new_status === 'terminé') {
+    actionText = `Terminé le ${dateText} (validé par ${actor.prenom || ''} ${actor.nom || ''})`.trim();
+  }
 
   await receptionPool.query(
     `
     UPDATE interventions
-    SET status = 'terminé',
-        person = $1,
-        action = 'Validation'
-    WHERE id = $2
+    SET status = $1,
+        person = $2,
+        action = $3
+    WHERE id = $4
     `,
-    [`${user.prenom} ${user.nom}`.trim() || user.email, id]
+    [new_status, personsText, actionText, id]
   );
 
   res.redirect('back');
 });
 
-// Création manuelle d'une intervention
+// Création manuelle d'une intervention (avec choix multiple de pièces)
 app.post('/chantiers/:chantierId/interventions', async (req, res) => {
   const chantierId = req.params.chantierId;
-  const { floor_id, room_id, lot, task } = req.body;
+  const { floor_id, room_ids, lot, task } = req.body;
   const user = req.session.user;
 
-  // récupérer le floor & room
-  const floorRes = await receptionPool.query(
-    'SELECT id, name FROM floors WHERE id = $1 AND chantier_id = $2',
-    [floor_id || null, chantierId]
-  );
-  if (!floorRes.rows.length) {
-    return res.status(400).send("Étage invalide pour ce chantier");
+  if (!floor_id || !lot || !task) {
+    return res.status(400).send('Étage, lot et tâche sont obligatoires.');
   }
-  const floor = floorRes.rows[0];
 
-  const roomRes = await receptionPool.query(
-    'SELECT id, name FROM rooms WHERE id = $1 AND floor_id = $2',
-    [room_id || null, floor.id]
-  );
-  if (!roomRes.rows.length) {
-    return res.status(400).send("Pièce invalide pour cet étage");
+  let roomIdsArray = [];
+  if (Array.isArray(room_ids)) {
+    roomIdsArray = room_ids;
+  } else if (typeof room_ids === 'string') {
+    roomIdsArray = [room_ids];
   }
-  const room = roomRes.rows[0];
+  roomIdsArray = roomIdsArray.filter((id) => id && String(id).trim().length > 0);
 
-  await receptionPool.query(
-    `
-    INSERT INTO interventions (
-      user_id, old_floor_name, old_room_name,
-      lot, task, status, person, action,
-      floor_id, room_id
-    )
-    VALUES ($1, $2, $3, $4, $5, 'ouvert', $6, 'Création', $7, $8)
-    `,
-    [
-      user.email,
-      floor.name,
-      room.name,
-      lot,
-      task,
-      `${user.prenom} ${user.nom}`.trim() || user.email,
-      floor.id,
-      room.id,
-    ]
-  );
+  if (!roomIdsArray.length) {
+    return res.status(400).send('Veuillez sélectionner au moins une pièce.');
+  }
+
+  const client = await receptionPool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // vérifier que l'étage appartient bien au chantier
+    const floorRes = await client.query(
+      'SELECT id, name FROM floors WHERE id = $1 AND chantier_id = $2',
+      [floor_id, chantierId]
+    );
+    if (!floorRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).send("Étage invalide pour ce chantier");
+    }
+    const floor = floorRes.rows[0];
+
+    for (const roomId of roomIdsArray) {
+      const roomRes = await client.query(
+        'SELECT id, name FROM rooms WHERE id = $1 AND floor_id = $2',
+        [roomId, floor.id]
+      );
+      if (!roomRes.rows.length) {
+        continue; // on ignore les pièces invalides
+      }
+      const room = roomRes.rows[0];
+
+      await client.query(
+        `
+        INSERT INTO interventions (
+          user_id, old_floor_name, old_room_name,
+          lot, task, created_at, status, person, action,
+          floor_id, room_id
+        )
+        VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Création', $6, $7)
+        `,
+        [
+          user.email,
+          floor.name,
+          room.name,
+          lot,
+          task,
+          floor.id,
+          room.id,
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+    return res.status(500).send("Erreur lors de la création des interventions.");
+  } finally {
+    client.release();
+  }
 
   res.redirect(`/chantiers/${chantierId}/taches`);
 });
@@ -448,10 +505,10 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
         `
         INSERT INTO interventions (
           user_id, old_floor_name, old_room_name,
-          lot, task, status, person, action,
+          lot, task, created_at, status, person, action,
           floor_id, room_id
         )
-        VALUES ($1, $2, $3, $4, $5, 'ouvert', $6, 'Création', $7, $8)
+        VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Création', $6, $7)
         `,
         [
           user.email,
@@ -459,7 +516,6 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
           room.name,
           lot,
           task,
-          `${user.prenom} ${user.nom}`.trim() || user.email,
           floor.id,
           room.id,
         ]
@@ -481,7 +537,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     fs.unlink(filePath, () => {});
   }
 
-  let message = `Import terminé : ${importedCount} tâches créées.`;
+  let message = `Import terminé : ${importedCount} tâches créées (statut: a faire).`;
   if (skipped.length) {
     message +=
       ' Certaines lignes ont été ignorées : ' + skipped.slice(0, 10).join(' ');

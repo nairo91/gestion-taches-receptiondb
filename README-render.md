@@ -1,19 +1,13 @@
-# Mise en place rapide
+# Déploiement rapide (Render)
 
-Variables d'environnement attendues :
+Variables d'environnement :
 
-- `RECEPTION_DB_URL` : URL Postgres de la base reception-db (Internal Database URL Render).
-- `SESSION_SECRET` : une chaîne aléatoire pour les sessions.
-- `USERS_CSV_PATH` : chemin vers le fichier des utilisateurs (par défaut `./users.csv`).
+- `RECEPTION_DB_URL` : URL Postgres (Internal sur Render).
+- `SESSION_SECRET` : chaîne secrète.
+- `USERS_CSV_PATH` : chemin du fichier CSV (par défaut `./users.csv`).
+- `DB_SSL` : à mettre à `true` uniquement en local si vous utilisez l'External URL.
 
 Commandes :
 
-- `npm install`
-- `npm start`
-
-Endpoints principaux :
-
-- `/login` : connexion (via users.csv).
-- `/` : liste des chantiers.
-- `/chantiers/:id/taches` : suivi des interventions par chantier.
-- `/import` : import d'un fichier Excel (A: étage, B: pièce, C: lot, D: tâche).
+- Build : `npm install`
+- Start : `npm start`

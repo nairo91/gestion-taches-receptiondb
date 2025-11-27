@@ -45,7 +45,12 @@
           </label>
 
           <label>Statut
-            <input type="text" name="status" value="<%= filters.status %>" placeholder="ouvert, terminé..." />
+            <select name="status">
+              <option value="">Tous</option>
+              <option value="a faire" <%= filters.status === 'a faire' ? 'selected' : '' %>>A faire</option>
+              <option value="en cours" <%= filters.status === 'en cours' ? 'selected' : '' %>>En cours</option>
+              <option value="terminé" <%= filters.status === 'terminé' ? 'selected' : '' %>>Terminé</option>
+            </select>
           </label>
 
           <button type="submit" class="btn">Filtrer</button>
@@ -61,7 +66,7 @@
               <th>Lot</th>
               <th>Tâche</th>
               <th>Statut</th>
-              <th>Personne / Action</th>
+              <th>Qui / Quand</th>
               <th>Créée le</th>
               <th>Actions</th>
             </tr>
@@ -80,14 +85,59 @@
                 <td><%= i.task %></td>
                 <td><%= i.status %></td>
                 <td>
-                  <strong><%= i.person %></strong><br />
-                  <small><%= i.action %></small>
+                  <strong><%= i.person || '' %></strong><br />
+                  <small><%= i.action || '' %></small>
                 </td>
                 <td><%= i.created_at ? i.created_at.toISOString().slice(0,10) : '' %></td>
                 <td>
+                  <!-- Formulaire pour passer EN COURS -->
                   <% if (i.status !== 'terminé') { %>
-                    <form method="post" action="/interventions/<%= i.id %>/done" class="inline-form">
-                      <button type="submit" class="btn btn-small">Marquer fait</button>
+                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+                      <input type="hidden" name="new_status" value="en cours" />
+                      <label>Qui ?
+                        <select name="persons" multiple size="3">
+                          <% usersList.forEach(u => { %>
+                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
+                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
+                            </option>
+                          <% }) %>
+                        </select>
+                      </label>
+                      <label>Depuis quand ?
+                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+                      </label>
+                      <button type="submit" class="btn btn-small">En cours</button>
+                    </form>
+                  <% } %>
+
+                  <!-- Formulaire pour passer TERMINÉ -->
+                  <% if (i.status !== 'terminé') { %>
+                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+                      <input type="hidden" name="new_status" value="terminé" />
+                      <label>Qui ?
+                        <select name="persons" multiple size="3">
+                          <% usersList.forEach(u => { %>
+                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
+                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
+                            </option>
+                          <% }) %>
+                        </select>
+                      </label>
+                      <label>Quand ?
+                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+                      </label>
+                      <button type="submit" class="btn btn-small">Terminer</button>
+                    </form>
+                  <% } %>
+
+                  <!-- Option de réinitialisation en "A faire" -->
+                  <% if (i.status !== 'a faire') { %>
+                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+                      <input type="hidden" name="new_status" value="a faire" />
+                      <label>Date
+                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+                      </label>
+                      <button type="submit" class="btn btn-small btn-secondary">Remettre à faire</button>
                     </form>
                   <% } %>
                 </td>
@@ -96,7 +146,7 @@
           </tbody>
         </table>
 
-        <h2>Ajouter une intervention manuellement</h2>
+        <h2>Ajouter une ou plusieurs interventions</h2>
         <form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
           <label>Étage
             <select name="floor_id" required>
@@ -106,12 +156,13 @@
             </select>
           </label>
 
-          <label>Pièce
-            <select name="room_id" required>
+          <label>Pièces (choix multiple)
+            <select name="room_ids" multiple size="6" required>
               <% rooms.forEach(r => { %>
                 <option value="<%= r.id %>"><%= r.floor_name %> - <%= r.name %></option>
               <% }) %>
             </select>
+            <span class="help">Ctrl+clic ou Maj+clic pour sélectionner plusieurs pièces.</span>
           </label>
 
           <label>Lot
@@ -122,7 +173,7 @@
             <input type="text" name="task" required />
           </label>
 
-          <button type="submit" class="btn">Ajouter</button>
+          <button type="submit" class="btn">Créer</button>
         </form>
       </section>
     </main>
