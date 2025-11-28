@@ -1015,10 +1015,11 @@ app.get('/import', async (req, res) => {
 });
 
 // Traitement de l'import Excel
+// Traitement de l'import Excel
+// ➜ ne crée PLUS d'interventions, ne sert qu'à remplir le catalogue lot_tasks
 app.post('/import', upload.single('fichier'), async (req, res) => {
-  const chantierId = req.body.chantier_id;
+  const chantierId = req.body.chantier_id; // on l'utilise juste pour l'UI / message
   const filePath = req.file ? req.file.path : null;
-  const user = req.session.user;
 
   const chantiers = (
     await receptionPool.query(
@@ -1057,84 +1058,49 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
   const sheet = workbook.worksheets[0];
 
   // Format attendu :
-  // A: floor_name | B: room_name | C: lot | D: task
-  const rowsData = [];
+  // A: étage (floor_name)
+  // B: pièce (room_name)
+  // C: lot
+  // D: tâche
+  const lotTaskPairs = new Set(); // pour éviter les doublons dans cette importation
+
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return; // en-tête
 
-    const floorName = row.getCell(1).value ? String(row.getCell(1).value).trim() : '';
-    const roomName  = row.getCell(2).value ? String(row.getCell(2).value).trim() : '';
-    const lot       = row.getCell(3).value ? String(row.getCell(3).value).trim() : '';
-    const task      = row.getCell(4).value ? String(row.getCell(4).value).trim() : '';
+    const lot =
+      row.getCell(3).value !== null
+        ? String(row.getCell(3).value).trim()
+        : '';
+    const task =
+      row.getCell(4).value !== null
+        ? String(row.getCell(4).value).trim()
+        : '';
 
-    if (!floorName || !roomName || !task) return;
+    if (!lot || !task) return;
 
-    rowsData.push({ floorName, roomName, lot, task });
+    const key = `${lot}|||${task}`;
+    lotTaskPairs.add(key);
   });
 
-  let importedCount = 0;
-
+  let insertedCount = 0;
   const client = await receptionPool.connect();
   try {
     await client.query('BEGIN');
 
-    for (const row of rowsData) {
-      const { floorName, roomName, lot, task } = row;
+    for (const key of lotTaskPairs) {
+      const [lot, task] = key.split('|||');
 
-      // 1) Étape : on la crée si elle n'existe pas encore pour ce chantier
-      let floorRes = await client.query(
-        'SELECT id, name FROM floors WHERE chantier_id = $1 AND name = $2',
-        [chantierId, floorName]
-      );
-
-      let floor;
-      if (!floorRes.rows.length) {
-        floorRes = await client.query(
-          'INSERT INTO floors (chantier_id, name) VALUES ($1, $2) RETURNING id, name',
-          [chantierId, floorName]
-        );
-      }
-      floor = floorRes.rows[0];
-
-      // 2) Chambre : on la crée si elle n’existe pas encore sur cet étage
-      let roomRes = await client.query(
-        'SELECT id, name FROM rooms WHERE floor_id = $1 AND name = $2',
-        [floor.id, roomName]
-      );
-
-      let room;
-      if (!roomRes.rows.length) {
-        roomRes = await client.query(
-          'INSERT INTO rooms (floor_id, name) VALUES ($1, $2) RETURNING id, name',
-          [floor.id, roomName]
-        );
-        room = roomRes.rows[0];
-      } else {
-        room = roomRes.rows[0];
-      }
-
-      // 3) Création de l’intervention
+      // On ajoute dans le catalogue global.
+      // La contrainte UNIQUE (lot, task) empêche les doublons.
       await client.query(
         `
-        INSERT INTO interventions (
-          user_id, old_floor_name, old_room_name,
-          lot, task, created_at, status, person, action,
-          floor_id, room_id
-        )
-        VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Création (import Excel)', $6, $7)
+        INSERT INTO lot_tasks (lot, task)
+        VALUES ($1, $2)
+        ON CONFLICT (lot, task) DO NOTHING
         `,
-        [
-          user.email,
-          floor.name,
-          room.name,
-          lot,
-          task,
-          floor.id,
-          room.id,
-        ]
+        [lot, task]
       );
-
-      importedCount++;
+      insertedCount++;
     }
 
     await client.query('COMMIT');
@@ -1144,14 +1110,14 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     return res.status(500).render('import', {
       chantiers,
       message: null,
-      error: "Erreur pendant l'import, voir les logs.",
+      error: "Erreur pendant l'import du catalogue de lots/tâches.",
     });
   } finally {
     client.release();
     fs.unlink(filePath, () => {});
   }
 
-  const message = `Import terminé : ${importedCount} tâches créées (statut : à faire). Toutes les lignes valides ont été importées (étages et pièces créés si nécessaire).`;
+  const message = `Import terminé : ${insertedCount} couples LOT / Tâche ajoutés au catalogue (à partir du fichier du chantier sélectionné).`;
 
   res.render('import', {
     chantiers,
