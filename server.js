@@ -1014,11 +1014,9 @@ app.get('/import', async (req, res) => {
   });
 });
 
-// Traitement de l'import Excel
-// Traitement de l'import Excel
-// ➜ ne crée PLUS d'interventions, ne sert qu'à remplir le catalogue lot_tasks
+// Traitement de l'import Excel : alimente le catalogue LOT / Tâche
 app.post('/import', upload.single('fichier'), async (req, res) => {
-  const chantierId = req.body.chantier_id; // on l'utilise juste pour l'UI / message
+  const chantierId = req.body.chantier_id;
   const filePath = req.file ? req.file.path : null;
 
   const chantiers = (
@@ -1057,50 +1055,60 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
   const sheet = workbook.worksheets[0];
 
-  // Format attendu :
-  // A: étage (floor_name)
-  // B: pièce (room_name)
-  // C: lot
-  // D: tâche
-  const lotTaskPairs = new Set(); // pour éviter les doublons dans cette importation
+  // On va lire : 
+  // Colonne A = LOT (peut être vide -> on reprend le dernier LOT non vide)
+  // Colonne B = Tâche
+  let currentLot = null;
+
+  // pour éviter les doublons (lot, task)
+  const pairs = new Set();
 
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return; // en-tête
+    // Ligne 1 = en-tête "LOT | Travaux chambre ..."
+    if (rowNumber === 1) return;
 
-    const lot =
-      row.getCell(3).value !== null
-        ? String(row.getCell(3).value).trim()
-        : '';
-    const task =
-      row.getCell(4).value !== null
-        ? String(row.getCell(4).value).trim()
-        : '';
+    const lotCell = row.getCell(1).value;
+    const taskCell = row.getCell(2).value;
 
-    if (!lot || !task) return;
+    const lot = lotCell ? String(lotCell).trim() : '';
+    const task = taskCell ? String(taskCell).trim() : '';
 
-    const key = `${lot}|||${task}`;
-    lotTaskPairs.add(key);
+    // si la cellule LOT est remplie on met à jour le "currentLot"
+    if (lot) {
+      currentLot = lot;
+    }
+
+    // si pas de lot courant ou pas de tâche -> on ignore
+    if (!currentLot || !task) return;
+
+    // on peut éventuellement filtrer certaines lignes "techniques"
+    // par ex. si tu as une ligne de titre spéciale dans la colonne B :
+    if (/^travaux chambre/i.test(task)) return;
+
+    const key = `${currentLot}|||${task}`;
+    pairs.add(key);
   });
 
-  let insertedCount = 0;
   const client = await receptionPool.connect();
+  let inserted = 0;
+
   try {
     await client.query('BEGIN');
 
-    for (const key of lotTaskPairs) {
+    for (const key of pairs) {
       const [lot, task] = key.split('|||');
 
-      // On ajoute dans le catalogue global.
-      // La contrainte UNIQUE (lot, task) empêche les doublons.
+      // si tu as mis une contrainte UNIQUE(lot, task) sur lot_tasks,
+      // tu peux faire un ON CONFLICT DO NOTHING.
       await client.query(
         `
         INSERT INTO lot_tasks (lot, task)
         VALUES ($1, $2)
-        ON CONFLICT (lot, task) DO NOTHING
+        ON CONFLICT DO NOTHING
         `,
         [lot, task]
       );
-      insertedCount++;
+      inserted++;
     }
 
     await client.query('COMMIT');
@@ -1110,21 +1118,23 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     return res.status(500).render('import', {
       chantiers,
       message: null,
-      error: "Erreur pendant l'import du catalogue de lots/tâches.",
+      error: "Erreur pendant l'import des LOTs / Tâches (voir logs serveur).",
     });
   } finally {
     client.release();
     fs.unlink(filePath, () => {});
   }
 
-  const message = `Import terminé : ${insertedCount} couples LOT / Tâche ajoutés au catalogue (à partir du fichier du chantier sélectionné).`;
+  const chantierLabel = chantiers.find(c => String(c.id) === String(chantierId))?.display_name || '';
+  const chantierInfo = chantierLabel ? ` (à partir du fichier du chantier « ${chantierLabel} »)` : '';
 
-  res.render('import', {
+  return res.render('import', {
     chantiers,
-    message,
+    message: `Import terminé : ${inserted} couples LOT / Tâche ajoutés au catalogue${chantierInfo}.`,
     error: null,
   });
 });
+
 
 
 
