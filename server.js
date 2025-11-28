@@ -1056,36 +1056,23 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
   const sheet = workbook.worksheets[0];
 
-  // On attend un format :
+  // Format attendu :
   // A: floor_name | B: room_name | C: lot | D: task
   const rowsData = [];
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return; // en-tête
 
-    const floorName =
-      row.getCell(1).value !== null
-        ? String(row.getCell(1).value).trim()
-        : '';
-    const roomName =
-      row.getCell(2).value !== null
-        ? String(row.getCell(2).value).trim()
-        : '';
-    const lot =
-      row.getCell(3).value !== null
-        ? String(row.getCell(3).value).trim()
-        : '';
-    const task =
-      row.getCell(4).value !== null
-        ? String(row.getCell(4).value).trim()
-        : '';
+    const floorName = row.getCell(1).value ? String(row.getCell(1).value).trim() : '';
+    const roomName  = row.getCell(2).value ? String(row.getCell(2).value).trim() : '';
+    const lot       = row.getCell(3).value ? String(row.getCell(3).value).trim() : '';
+    const task      = row.getCell(4).value ? String(row.getCell(4).value).trim() : '';
 
-    if (!task) return;
+    if (!floorName || !roomName || !task) return;
 
     rowsData.push({ floorName, roomName, lot, task });
   });
 
   let importedCount = 0;
-  let skipped = [];
 
   const client = await receptionPool.connect();
   try {
@@ -1094,32 +1081,39 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     for (const row of rowsData) {
       const { floorName, roomName, lot, task } = row;
 
-      // trouver l'étage
-      const floorRes = await client.query(
+      // 1) Étape : on la crée si elle n'existe pas encore pour ce chantier
+      let floorRes = await client.query(
         'SELECT id, name FROM floors WHERE chantier_id = $1 AND name = $2',
         [chantierId, floorName]
       );
-      if (!floorRes.rows.length) {
-        skipped.push(
-          `Ligne avec étage "${floorName}", pièce "${roomName}" ignorée (étage introuvable).`
-        );
-        continue;
-      }
-      const floor = floorRes.rows[0];
 
-      // trouver la pièce
-      const roomRes = await client.query(
+      let floor;
+      if (!floorRes.rows.length) {
+        floorRes = await client.query(
+          'INSERT INTO floors (chantier_id, name) VALUES ($1, $2) RETURNING id, name',
+          [chantierId, floorName]
+        );
+      }
+      floor = floorRes.rows[0];
+
+      // 2) Chambre : on la crée si elle n’existe pas encore sur cet étage
+      let roomRes = await client.query(
         'SELECT id, name FROM rooms WHERE floor_id = $1 AND name = $2',
         [floor.id, roomName]
       );
-      if (!roomRes.rows.length) {
-        skipped.push(
-          `Ligne avec étage "${floorName}", pièce "${roomName}" ignorée (pièce introuvable).`
-        );
-        continue;
-      }
-      const room = roomRes.rows[0];
 
+      let room;
+      if (!roomRes.rows.length) {
+        roomRes = await client.query(
+          'INSERT INTO rooms (floor_id, name) VALUES ($1, $2) RETURNING id, name',
+          [floor.id, roomName]
+        );
+        room = roomRes.rows[0];
+      } else {
+        room = roomRes.rows[0];
+      }
+
+      // 3) Création de l’intervention
       await client.query(
         `
         INSERT INTO interventions (
@@ -1127,7 +1121,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
           lot, task, created_at, status, person, action,
           floor_id, room_id
         )
-        VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Création', $6, $7)
+        VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Création (import Excel)', $6, $7)
         `,
         [
           user.email,
@@ -1139,6 +1133,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
           room.id,
         ]
       );
+
       importedCount++;
     }
 
@@ -1156,11 +1151,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     fs.unlink(filePath, () => {});
   }
 
-  let message = `Import terminé : ${importedCount} tâches créées (statut: a faire).`;
-  if (skipped.length) {
-    message +=
-      ' Certaines lignes ont été ignorées : ' + skipped.slice(0, 10).join(' ');
-  }
+  const message = `Import terminé : ${importedCount} tâches créées (statut : à faire). Toutes les lignes valides ont été importées (étages et pièces créés si nécessaire).`;
 
   res.render('import', {
     chantiers,
@@ -1168,6 +1159,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     error: null,
   });
 });
+
 
 
 // ----- DEMARRAGE ----- //
