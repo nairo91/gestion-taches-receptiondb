@@ -5,8 +5,8 @@
     <title>Suivi des tâches - <%= chantier.display_name %></title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <header>
+  <body class="app-body">
+    <header class="app-header">
       <h1>Suivi des tâches - <%= chantier.display_name %></h1>
       <div class="user-info">
         Connecté en tant que
@@ -16,12 +16,13 @@
       </div>
     </header>
 
-    <main>
-      <section>
-        <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
-
-        <h2>Filtres</h2>
-        <form method="get" class="filters">
+    <main class="page-shell">
+      <section class="card">
+        <div class="section-heading with-actions">
+          <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+          <h2>Filtres</h2>
+        </div>
+        <form method="get" class="filters filter-grid">
           <label>Étage
             <select name="floor">
               <option value="">Tous</option>
@@ -39,17 +40,17 @@
               <% }) %>
             </select>
           </label>
-            <label>Lot
-              <select name="lot">
-                <option value="">Tous</option>
-                <% lotsOptions.forEach(l => { %>
-                  <option value="<%= l.lot %>" <%= filters.lot === l.lot ? 'selected' : '' %>>
-                    <%= l.lot %>
-                  </option>
-                <% }) %>
-              </select>
-            </label>
 
+          <label>Lot
+            <select name="lot">
+              <option value="">Tous</option>
+              <% lotsOptions.forEach(l => { %>
+                <option value="<%= l.lot %>" <%= filters.lot === l.lot ? 'selected' : '' %>>
+                  <%= l.lot %>
+                </option>
+              <% }) %>
+            </select>
+          </label>
 
           <label>Statut
             <select name="status">
@@ -60,11 +61,17 @@
             </select>
           </label>
 
-          <button type="submit" class="btn">Filtrer</button>
-          <a href="/chantiers/<%= chantier.id %>/taches" class="btn btn-secondary">Réinitialiser</a>
+          <div class="filters-actions">
+            <button type="submit" class="btn">Filtrer</button>
+            <a href="/chantiers/<%= chantier.id %>/taches" class="btn btn-secondary">Réinitialiser</a>
+          </div>
         </form>
+      </section>
 
-        <h2>Liste des tâches (interventions)</h2>
+      <section class="card">
+        <div class="section-heading">
+          <h2>Liste des tâches (interventions)</h2>
+        </div>
         <table class="table">
           <thead>
             <tr>
@@ -81,98 +88,90 @@
           <tbody>
             <% if (!interventions.length) { %>
               <tr>
-                <td colspan="8">Aucune intervention pour ce chantier (ou filtre trop restrictif).</td>
+                <td colspan="8" class="empty-state">Aucune intervention pour ce chantier (ou filtre trop restrictif).</td>
               </tr>
             <% } %>
-            <% interventions.forEach(i => { %>
+            <% interventions.forEach(i => { const statusClass = i.status === 'terminé' ? 'status-termine' : i.status === 'en cours' ? 'status-en-cours' : 'status-a-faire'; %>
               <tr class="<%= i.status === 'terminé' ? 'done' : '' %>">
                 <td><%= i.floor_name || i.old_floor_name %></td>
                 <td><%= i.room_name || i.old_room_name %></td>
                 <td><%= i.lot %></td>
                 <td><%= i.task %></td>
-                <td><%= i.status %></td>
+                <td><span class="status-badge <%= statusClass %>"><%= i.status %></span></td>
                 <td>
                   <strong><%= i.person || '' %></strong><br />
                   <small class="action-text"><%= i.action || '' %></small>
                 </td>
 
                 <td><%= i.created_at ? i.created_at.toISOString().slice(0,10) : '' %></td>
-                <td>
-  <!-- Bouton Info (historique complet) -->
-  <a href="/interventions/<%= i.id %>/history"
-     class="btn btn-small btn-secondary"
-     target="_blank">
-    Info
-  </a>
-  <br /><br />
+                <td class="table-actions">
+                  <a href="/interventions/<%= i.id %>/history"
+                     class="btn btn-small btn-secondary"
+                     target="_blank">
+                    Info
+                  </a>
 
-  <!-- Formulaire pour passer EN COURS -->
-  <% if (i.status !== 'terminé') { %>
-    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
-      <input type="hidden" name="new_status" value="en cours" />
-      <label>Qui ?
-        <select name="persons" multiple size="3">
-          <% usersList.forEach(u => { %>
-            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
-              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-      <label>Depuis quand ?
-        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
-      </label>
-      <button type="submit" class="btn btn-small">En cours</button>
-    </form>
-  <% } %>
+                  <% if (i.status !== 'terminé') { %>
+                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+                      <input type="hidden" name="new_status" value="en cours" />
+                      <label>Qui ?
+                        <select name="persons" multiple size="3">
+                          <% usersList.forEach(u => { %>
+                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
+                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
+                            </option>
+                          <% }) %>
+                        </select>
+                      </label>
+                      <label>Depuis quand ?
+                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+                      </label>
+                      <button type="submit" class="btn btn-small">En cours</button>
+                    </form>
+                  <% } %>
 
-  <!-- Formulaire pour passer TERMINÉ -->
-  <% if (i.status !== 'terminé') { %>
-    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
-      <input type="hidden" name="new_status" value="terminé" />
-      <label>Qui ?
-        <select name="persons" multiple size="3">
-          <% usersList.forEach(u => { %>
-            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
-              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-      <label>Quand ?
-        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
-      </label>
-      <button type="submit" class="btn btn-small">Terminer</button>
-    </form>
-  <% } %>
+                  <% if (i.status !== 'terminé') { %>
+                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+                      <input type="hidden" name="new_status" value="terminé" />
+                      <label>Qui ?
+                        <select name="persons" multiple size="3">
+                          <% usersList.forEach(u => { %>
+                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
+                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
+                            </option>
+                          <% }) %>
+                        </select>
+                      </label>
+                      <label>Quand ?
+                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+                      </label>
+                      <button type="submit" class="btn btn-small">Terminer</button>
+                    </form>
+                  <% } %>
 
-  <!-- Option de réinitialisation en "A faire" -->
-  <% if (i.status !== 'a faire') { %>
-    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
-      <input type="hidden" name="new_status" value="a faire" />
-      <label>Date
-        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
-      </label>
-      <button type="submit" class="btn btn-small btn-secondary">Remettre à faire</button>
-    </form>
-  <% } %>
-</td>
-
+                  <% if (i.status !== 'a faire') { %>
+                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+                      <input type="hidden" name="new_status" value="a faire" />
+                      <label>Date
+                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+                      </label>
+                      <button type="submit" class="btn btn-small btn-secondary">Remettre à faire</button>
+                    </form>
+                  <% } %>
+                </td>
               </tr>
             <% }) %>
           </tbody>
         </table>
+      </section>
 
-        <h2>Ajouter une ou plusieurs interventions</h2>
+      <section class="card">
+        <div class="section-heading with-actions">
+          <h2>Ajouter une ou plusieurs interventions</h2>
+          <a href="/chantiers/<%= chantier.id %>/lots" class="btn btn-secondary">Appliquer des LOTs du catalogue</a>
+        </div>
 
-<p>
-  <a href="/chantiers/<%= chantier.id %>/lots" class="btn">
-    Appliquer des LOTs du catalogue
-  </a>
-</p>
-
-<form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
-
+        <form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
           <label>Étage
             <select name="floor_id" required>
               <% floors.forEach(f => { %>
@@ -190,38 +189,32 @@
             <span class="help">Ctrl+clic ou Maj+clic pour sélectionner plusieurs pièces.</span>
           </label>
 
- <label>Lot
-  <select name="lot" required>
-    <option value="">-- Choisir un LOT --</option>
+          <label>Lot
+            <select name="lot" required>
+              <option value="">-- Choisir un LOT --</option>
 
-    <% if (typeof catalogueLots !== 'undefined' && catalogueLots && catalogueLots.length) { %>
-      <% catalogueLots.forEach(l => { %>
-        <option value="<%= l.lot %>"><%= l.lot %></option>
-      <% }) %>
-    <% } else { %>
-      <% lotsOptions.forEach(l => { %>
-        <option value="<%= l.lot %>"><%= l.lot %></option>
-      <% }) %>
-    <% } %>
-  </select>
-</label>
+              <% if (typeof catalogueLots !== 'undefined' && catalogueLots && catalogueLots.length) { %>
+                <% catalogueLots.forEach(l => { %>
+                  <option value="<%= l.lot %>"><%= l.lot %></option>
+                <% }) %>
+              <% } else { %>
+                <% lotsOptions.forEach(l => { %>
+                  <option value="<%= l.lot %>"><%= l.lot %></option>
+                <% }) %>
+              <% } %>
+            </select>
+          </label>
 
-
-
-    <label>Tâche
-  <select name="task" required>
-    <option value="">-- Choisir un LOT d'abord --</option>
-  </select>
-</label>
-
+          <label>Tâche
+            <select name="task" required>
+              <option value="">-- Choisir un LOT d'abord --</option>
+            </select>
+          </label>
 
           <button type="submit" class="btn">Créer</button>
         </form>
       </section>
-       <button type="submit" class="btn">Créer</button>
-    </form>
-  </section>
-</main>
+    </main>
 <script>
   // données des pièces (à réutiliser dans plusieurs scripts)
   const ROOMS_DATA = JSON.parse('<%- JSON.stringify(rooms || []) %>');
