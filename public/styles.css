@@ -187,3 +187,7 @@ input[type="date"] {
   margin-bottom: 4px;
   font-size: 13px;
 }
+
+.action-text {
+  white-space: pre-line; /* respecte les \n dans i.action */
+}

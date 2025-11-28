@@ -1,19 +1,19 @@
-Nom;Prenom;email;password
-Doe;John;john.doe@example.com;test123
+Nom;Prenom;email;password;role
 
-ATHARI;Keivan;athari.keivan@batirenov.info;KeivanBR91Athari
-BLOT;Valentin;blot.valentin@batirenov.info;ValentinBR91Blot
+
+ATHARI;Keivan;athari.keivan@batirenov.info;KeivanBR91Athari;admin
+BLOT;Valentin;blot.valentin@batirenov.info;ValentinBR91Blot;admin
 COULIBALY;Baba;coulibaly.baba@batirenov.info;BabaBR91Coulibaly
-DACOSTA;André;dacosta.andre@batirenov.info;AndrBR91costa_-
-GOURDEL;Yoann;gourdel.yoann@batirenov.info	;YoannBR91Gourdel
-LAUNAY;Jeremy;launay.jeremy@batirenov.info;JLaunayBR91$_
+DACOSTA;André;dacosta.andre@batirenov.info;AndrBR91costa_-;admin
+GOURDEL;Yoann;gourdel.yoann@batirenov.info	;YoannBR91Gourdel;admin
+LAUNAY;Jeremy;launay.jeremy@batirenov.info;JLaunayBR91$_;admin
 MARZOUKI;Adam;marzouki.adam@batirenov.info;AdamBR91Marzouki
 MAZZUCCO;Ryan;mazzucco.ryan@batirenov.info;RyanBR91Mazzucco
-MIRONA;Orian;mirona.orian@batirenov.info;OMironaBR91$
+MIRONA;Orian;mirona.orian@batirenov.info;OMironaBR91$;admin
 MONTEIRO;Maryline;monteiro.maryline@batirenov.info;MonteiroBR91Maryline
 PENA;Angel;Pena.angel@batirenov.info;AngelBR91Pena
 PEREIRA	Romain;pereira.romain@batirenov.info;RomainBR91Pereira
-ROUAULT;Christophe;rouault.christophe@batirenov.info;RouaultBR91Christophe
+ROUAULT;Christophe;rouault.christophe@batirenov.info;RouaultBR91Christophe;admin
 SIMON;Delphine;simon.delphine@batirenov.info;DelphineBR91Simon*
 Vauthier;Philippe;vauthier.philippe@batirenov.info;VauthierBR91
 VAZ;Xavier;vaz.xavier@batirenov.info;XavierBR91Vaz

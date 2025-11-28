@@ -39,6 +39,7 @@
                   <td><%= c.created_at ? c.created_at.toISOString().slice(0,10) : '' %></td>
                   <td>
                     <a href="/chantiers/<%= c.id %>/taches">Suivi des tâches</a>
+                      <a href="/chantiers/<%= c.id %>/structure">Structure (étages / chambres)</a>
                   </td>
                 </tr>
               <% }) %>
@@ -50,6 +51,16 @@
           <a class="btn" href="/import">Importer un fichier Excel de tâches</a>
         </p>
       </section>
+      <h2>Ajouter un chantier</h2>
+<form method="post" action="/chantiers" class="add-task-form">
+  <label>Nom du chantier
+    <input type="text" name="name" required />
+  </label>
+  <button type="submit" class="btn">Créer le chantier</button>
+</form>
+
+
+
     </main>
   </body>
 </html>

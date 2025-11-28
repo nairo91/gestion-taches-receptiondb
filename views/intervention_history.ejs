@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Historique de la tâche</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Historique de la tâche</h1>
+      <p>
+        Chantier : <strong><%= intervention.chantier_name %></strong><br />
+        Étape : <%= intervention.floor_name || intervention.old_floor_name %> -
+        Pièce : <%= intervention.room_name || intervention.old_room_name %><br />
+        Lot : <strong><%= intervention.lot %></strong><br />
+        Tâche : <strong><%= intervention.task %></strong>
+      </p>
+      <p>
+        <a href="/chantiers/<%= intervention.chantier_id %>/taches" class="btn btn-secondary">
+          ← Retour aux tâches
+        </a>
+      </p>
+    </header>
+
+    <main>
+      <h2>Historique des actions</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date enregistrement</th>
+            <th>Type</th>
+            <th>Ancien statut</th>
+            <th>Nouveau statut</th>
+            <th>Personnes</th>
+            <th>Date de l'action</th>
+            <th>Acteur</th>
+            <th>Détail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Ligne de création (à partir de l'intervention) -->
+          <tr>
+            <td><%= intervention.created_at ? intervention.created_at.toISOString().slice(0,10) : '' %></td>
+            <td>création</td>
+            <td></td>
+            <td><%= intervention.status %></td>
+            <td><%= intervention.person || '' %></td>
+            <td><%= intervention.created_at ? intervention.created_at.toISOString().slice(0,10) : '' %></td>
+            <td><%= intervention.user_id || '' %></td>
+            <td><%= intervention.action || 'Création' %></td>
+          </tr>
+
+          <% history.forEach(h => { %>
+            <tr>
+              <td><%= h.created_at.toISOString().slice(0,10) %></td>
+              <td><%= h.event_type %></td>
+              <td><%= h.old_status || '' %></td>
+              <td><%= h.new_status || '' %></td>
+              <td><%= h.persons || '' %></td>
+              <td><%= h.date_event || '' %></td>
+              <td><%= h.actor_name || h.actor_email || '' %></td>
+              <td><%= h.note || '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </main>
+  </body>
+</html>

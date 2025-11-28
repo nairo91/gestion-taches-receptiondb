@@ -39,10 +39,17 @@
               <% }) %>
             </select>
           </label>
+            <label>Lot
+              <select name="lot">
+                <option value="">Tous</option>
+                <% lotsOptions.forEach(l => { %>
+                  <option value="<%= l.lot %>" <%= filters.lot === l.lot ? 'selected' : '' %>>
+                    <%= l.lot %>
+                  </option>
+                <% }) %>
+              </select>
+            </label>
 
-          <label>Lot
-            <input type="text" name="lot" value="<%= filters.lot %>" />
-          </label>
 
           <label>Statut
             <select name="status">
@@ -86,68 +93,86 @@
                 <td><%= i.status %></td>
                 <td>
                   <strong><%= i.person || '' %></strong><br />
-                  <small><%= i.action || '' %></small>
+                  <small class="action-text"><%= i.action || '' %></small>
                 </td>
+
                 <td><%= i.created_at ? i.created_at.toISOString().slice(0,10) : '' %></td>
                 <td>
-                  <!-- Formulaire pour passer EN COURS -->
-                  <% if (i.status !== 'terminé') { %>
-                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
-                      <input type="hidden" name="new_status" value="en cours" />
-                      <label>Qui ?
-                        <select name="persons" multiple size="3">
-                          <% usersList.forEach(u => { %>
-                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
-                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
-                            </option>
-                          <% }) %>
-                        </select>
-                      </label>
-                      <label>Depuis quand ?
-                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
-                      </label>
-                      <button type="submit" class="btn btn-small">En cours</button>
-                    </form>
-                  <% } %>
+  <!-- Bouton Info (historique complet) -->
+  <a href="/interventions/<%= i.id %>/history"
+     class="btn btn-small btn-secondary"
+     target="_blank">
+    Info
+  </a>
+  <br /><br />
 
-                  <!-- Formulaire pour passer TERMINÉ -->
-                  <% if (i.status !== 'terminé') { %>
-                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
-                      <input type="hidden" name="new_status" value="terminé" />
-                      <label>Qui ?
-                        <select name="persons" multiple size="3">
-                          <% usersList.forEach(u => { %>
-                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
-                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
-                            </option>
-                          <% }) %>
-                        </select>
-                      </label>
-                      <label>Quand ?
-                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
-                      </label>
-                      <button type="submit" class="btn btn-small">Terminer</button>
-                    </form>
-                  <% } %>
+  <!-- Formulaire pour passer EN COURS -->
+  <% if (i.status !== 'terminé') { %>
+    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+      <input type="hidden" name="new_status" value="en cours" />
+      <label>Qui ?
+        <select name="persons" multiple size="3">
+          <% usersList.forEach(u => { %>
+            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
+              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+      <label>Depuis quand ?
+        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+      </label>
+      <button type="submit" class="btn btn-small">En cours</button>
+    </form>
+  <% } %>
 
-                  <!-- Option de réinitialisation en "A faire" -->
-                  <% if (i.status !== 'a faire') { %>
-                    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
-                      <input type="hidden" name="new_status" value="a faire" />
-                      <label>Date
-                        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
-                      </label>
-                      <button type="submit" class="btn btn-small btn-secondary">Remettre à faire</button>
-                    </form>
-                  <% } %>
-                </td>
+  <!-- Formulaire pour passer TERMINÉ -->
+  <% if (i.status !== 'terminé') { %>
+    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+      <input type="hidden" name="new_status" value="terminé" />
+      <label>Qui ?
+        <select name="persons" multiple size="3">
+          <% usersList.forEach(u => { %>
+            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
+              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+      <label>Quand ?
+        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+      </label>
+      <button type="submit" class="btn btn-small">Terminer</button>
+    </form>
+  <% } %>
+
+  <!-- Option de réinitialisation en "A faire" -->
+  <% if (i.status !== 'a faire') { %>
+    <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
+      <input type="hidden" name="new_status" value="a faire" />
+      <label>Date
+        <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+      </label>
+      <button type="submit" class="btn btn-small btn-secondary">Remettre à faire</button>
+    </form>
+  <% } %>
+</td>
+
               </tr>
             <% }) %>
           </tbody>
         </table>
 
         <h2>Ajouter une ou plusieurs interventions</h2>
-        <form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
+
+<p>
+  <a href="/chantiers/<%= chantier.id %>/lots" class="btn">
+    Appliquer des LOTs du catalogue
+  </a>
+</p>
+
+<form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
+
           <label>Étage
             <select name="floor_id" required>
               <% floors.forEach(f => { %>
@@ -165,17 +190,200 @@
             <span class="help">Ctrl+clic ou Maj+clic pour sélectionner plusieurs pièces.</span>
           </label>
 
-          <label>Lot
-            <input type="text" name="lot" required />
-          </label>
+ <label>Lot
+  <select name="lot" required>
+    <option value="">-- Choisir un LOT --</option>
 
-          <label>Tâche
-            <input type="text" name="task" required />
-          </label>
+    <% if (typeof catalogueLots !== 'undefined' && catalogueLots && catalogueLots.length) { %>
+      <% catalogueLots.forEach(l => { %>
+        <option value="<%= l.lot %>"><%= l.lot %></option>
+      <% }) %>
+    <% } else { %>
+      <% lotsOptions.forEach(l => { %>
+        <option value="<%= l.lot %>"><%= l.lot %></option>
+      <% }) %>
+    <% } %>
+  </select>
+</label>
+
+
+
+    <label>Tâche
+  <select name="task" required>
+    <option value="">-- Choisir un LOT d'abord --</option>
+  </select>
+</label>
+
 
           <button type="submit" class="btn">Créer</button>
         </form>
       </section>
-    </main>
-  </body>
+       <button type="submit" class="btn">Créer</button>
+    </form>
+  </section>
+</main>
+<script>
+  // données des pièces (à réutiliser dans plusieurs scripts)
+  const ROOMS_DATA = JSON.parse('<%- JSON.stringify(rooms || []) %>');
+</script>
+
+<script>
+  (function () {
+    // données envoyées par le serveur
+    const lotTasks = JSON.parse('<%- JSON.stringify(lotTasks || []) %>');
+
+    // construire map lot -> [tâches]
+    const tasksByLot = {};
+    lotTasks.forEach(row => {
+      if (!row.lot || !row.task) return;
+      if (!tasksByLot[row.lot]) tasksByLot[row.lot] = [];
+      if (!tasksByLot[row.lot].includes(row.task)) {
+        tasksByLot[row.lot].push(row.task);
+      }
+    });
+
+    const form = document.querySelector('form.add-task-form');
+    if (!form) return;
+
+    const lotSelect  = form.querySelector('select[name="lot"]');
+    const taskSelect = form.querySelector('select[name="task"]');
+
+    if (!lotSelect || !taskSelect) return;
+
+    function refreshTasks() {
+      const lot = lotSelect.value;
+
+      // vider la liste
+      while (taskSelect.firstChild) {
+        taskSelect.removeChild(taskSelect.firstChild);
+      }
+
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = lot
+        ? '-- Choisir une tâche --'
+        : '-- Choisir un LOT d\'abord --';
+      taskSelect.appendChild(defaultOpt);
+
+      if (!lot || !tasksByLot[lot]) return;
+
+      tasksByLot[lot].forEach(task => {
+        const opt = document.createElement('option');
+        opt.value = task;
+        opt.textContent = task;
+        taskSelect.appendChild(opt);
+      });
+    }
+
+    lotSelect.addEventListener('change', refreshTasks);
+    // initialisation
+    refreshTasks();
+  })();
+</script>
+
+<script>
+  (function () {
+    // Toutes les pièces avec leur étage
+    const rooms = JSON.parse('<%- JSON.stringify(rooms || []) %>');
+
+    const form = document.querySelector('form.add-task-form');
+    if (!form) return;
+
+    const floorSelect = form.querySelector('select[name="floor_id"]');
+    const roomSelect  = form.querySelector('select[name="room_ids"]');
+    if (!floorSelect || !roomSelect) return;
+
+    function refreshRooms() {
+      const floorId = floorSelect.value;
+
+      // vider la liste actuelle
+      while (roomSelect.firstChild) {
+        roomSelect.removeChild(roomSelect.firstChild);
+      }
+
+      // pièces de l'étage sélectionné
+      const filtered = rooms.filter(r => String(r.floor_id) === String(floorId));
+
+      filtered.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.floor_name + ' - ' + r.name;
+        roomSelect.appendChild(opt);
+      });
+    }
+
+    floorSelect.addEventListener('change', refreshRooms);
+    // première initialisation (avec l'étage par défaut du select)
+    refreshRooms();
+  })();
+</script>
+
+<script>
+  (function () {
+    const rooms = ROOMS_DATA;
+    const filtersForm = document.querySelector('form.filters');
+    if (!filtersForm) return;
+
+    const floorSelect = filtersForm.querySelector('select[name="floor"]');
+    const roomSelect  = filtersForm.querySelector('select[name="room"]');
+
+    if (!floorSelect || !roomSelect) return;
+
+    function rebuildRoomOptions() {
+      const floorId = floorSelect.value;
+      const currentValue = roomSelect.value;
+
+      // vider
+      while (roomSelect.firstChild) {
+        roomSelect.removeChild(roomSelect.firstChild);
+      }
+
+      // option "Toutes"
+      const optAll = document.createElement('option');
+      optAll.value = '';
+      optAll.textContent = floorId
+        ? 'Toutes les chambres de cet étage'
+        : 'Toutes';
+      roomSelect.appendChild(optAll);
+
+      // filtrage des chambres
+      let filtered = rooms;
+      if (floorId) {
+        filtered = rooms.filter(r => String(r.floor_id) === String(floorId));
+      }
+
+      filtered.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.floor_name + ' - ' + r.name;
+        if (String(r.id) === String(currentValue)) {
+          opt.selected = true;
+        }
+        roomSelect.appendChild(opt);
+      });
+    }
+
+    // initialisation (en tenant compte des filtres déjà dans l’URL)
+    rebuildRoomOptions();
+
+    // quand l’étage change, on remet le filtre pièce à "Toutes" + reconstruit
+    floorSelect.addEventListener('change', () => {
+      roomSelect.value = '';
+      rebuildRoomOptions();
+    });
+
+    // ----- AUTO-SUBMIT DES FILTRES -----
+    ['floor', 'room', 'lot', 'status'].forEach(name => {
+      const el = filtersForm.querySelector(`[name="${name}"]`);
+      if (el) {
+        el.addEventListener('change', () => {
+          filtersForm.submit();
+        });
+      }
+    });
+  })();
+</script>
+
+</body>
 </html>
+

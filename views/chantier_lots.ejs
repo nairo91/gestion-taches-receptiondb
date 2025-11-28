@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Appliquer des LOTs - <%= chantier.display_name %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Appliquer des LOTs - <%= chantier.display_name %></h1>
+      <div class="user-info">
+    <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+      Connecté en tant que
+      <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+      (<%= currentUser.email %>) -
+      <a href="/logout">Déconnexion</a>
+    <% } else { %>
+      <a href="/login">Connexion</a>
+    <% } %>
+  </div>
+
+    </header>
+
+    <main>
+      <section>
+        <a href="/chantiers/<%= chantier.id %>/taches" class="btn btn-secondary">← Retour aux tâches</a>
+        <a href="/catalogue" class="btn btn-secondary">Catalogue LOTs</a>
+
+        <% if (error) { %>
+          <div class="alert"><%= error %></div>
+        <% } %>
+        <% if (message) { %>
+          <div class="success"><%= message %></div>
+        <% } %>
+
+        <h2>Paramètres d'application</h2>
+        <form method="post" action="/chantiers/<%= chantier.id %>/lots/apply" class="add-task-form">
+          <label>Étage
+            <select name="floor_id" required>
+              <option value="">-- Choisir --</option>
+              <% floors.forEach(f => { %>
+                <option value="<%= f.id %>"><%= f.name %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>Pièces (choix multiple)
+            <select name="room_ids" multiple size="8">
+              <% rooms.forEach(r => { %>
+                <option value="<%= r.id %>"><%= r.floor_name %> - <%= r.name %></option>
+              <% }) %>
+            </select>
+            <span class="help">Vous pouvez sélectionner plusieurs pièces (Ctrl+clic / Maj+clic).</span>
+          </label>
+
+          <label>
+            <input type="checkbox" name="all_rooms_on_floor" />
+            Appliquer à toutes les pièces de l'étage sélectionné
+          </label>
+
+          <label>LOTS à appliquer
+            <select name="lots" multiple size="8" required>
+              <% lots.forEach(l => { %>
+                <option value="<%= l.lot %>"><%= l.lot %> (<%= l.nb_tasks %> tâches)</option>
+              <% }) %>
+            </select>
+          </label>
+
+          <button type="submit" class="btn">Créer les interventions</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

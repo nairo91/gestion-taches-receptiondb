@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Catalogue de LOTs</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Catalogue de LOTs</h1>
+     <div class="user-info">
+  <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+    <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+    (<%= currentUser.email %>) -
+    <a href="/logout">Déconnexion</a>
+  <% } else { %>
+    <a href="/login">Connexion</a>
+  <% } %>
+</div>
+
+    </header>
+
+    <main>
+      <section>
+        <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+        <a href="/catalogue/import" class="btn">Importer un catalogue Excel</a>
+
+        <h2>LOTS disponibles</h2>
+        <% if (!lots.length) { %>
+          <p>Aucun LOT dans le catalogue. Importez un fichier Excel.</p>
+        <% } else { %>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Lot</th>
+                <th>Nombre de tâches</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% lots.forEach(l => { %>
+                <tr>
+                  <td><%= l.lot %></td>
+                  <td><%= l.nb_tasks %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Structure chantier - <%= chantier.display_name %></title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Structure du chantier - <%= chantier.display_name %></h1>
+    <div class="user-info">
+      Connecté en tant que
+      <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+      (<%= currentUser.email %>)
+      <a href="/logout">Déconnexion</a>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+
+      <h2>Étages</h2>
+      <ul>
+        <% floors.forEach(f => { %>
+          <li>
+            <strong><%= f.name %></strong>
+
+            <ul>
+              <% rooms.filter(r => r.floor_id === f.id).forEach(r => { %>
+                <li><%= r.name %></li>
+              <% }) %>
+            </ul>
+
+            <form method="post" action="/floors/<%= f.id %>/rooms" class="inline-form">
+              <input type="hidden" name="chantier_id" value="<%= chantier.id %>" />
+              <input type="text" name="name" placeholder="Nouvelle chambre" required />
+              <button type="submit" class="btn btn-small">Ajouter chambre</button>
+            </form>
+          </li>
+        <% }) %>
+      </ul>
+
+      <h3>Ajouter un étage</h3>
+      <form method="post" action="/chantiers/<%= chantier.id %>/floors">
+        <label>Nom de l'étage
+          <input type="text" name="name" required />
+        </label>
+        <button type="submit" class="btn">Ajouter l'étage</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

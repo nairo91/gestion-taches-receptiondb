@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Import catalogue LOTs</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Import du catalogue de LOTs</h1>
+     <div class="user-info">
+  <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+    <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+    (<%= currentUser.email %>) -
+    <a href="/logout">Déconnexion</a>
+  <% } else { %>
+    <a href="/login">Connexion</a>
+  <% } %>
+</div>
+
+    </header>
+
+    <main>
+      <section>
+        <a href="/catalogue" class="btn btn-secondary">← Retour au catalogue</a>
+
+        <% if (error) { %>
+          <div class="alert"><%= error %></div>
+        <% } %>
+        <% if (message) { %>
+          <div class="success"><%= message %></div>
+        <% } %>
+
+        <form method="post" action="/catalogue/import" enctype="multipart/form-data" class="import-form">
+          <label>Fichier Excel
+            <input type="file" name="fichier" accept=".xlsx" required />
+          </label>
+          <p class="help">
+            Colonne A : LOT (peut être vide, on reprend le dernier LOT non vide).<br />
+            Colonne B : Tâche (désignation).
+          </p>
+          <button type="submit" class="btn">Importer le catalogue</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

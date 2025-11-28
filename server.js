@@ -29,7 +29,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-
 // ----- SESSION ----- //
 app.use(
   session({
@@ -39,7 +38,369 @@ app.use(
   })
 );
 
+
+// ---- CATALOGUE LOTS : VUE LISTE ----
+app.get('/catalogue', async (req, res) => {
+  const result = await receptionPool.query(
+    `
+    SELECT lot, COUNT(*) AS nb_tasks
+    FROM lot_tasks
+    GROUP BY lot
+    ORDER BY lot
+    `
+  );
+
+  res.render('catalogue', {
+    lots: result.rows,
+  });
+});
+
+// ---- CATALOGUE LOTS : IMPORT EXCEL ----
+// GET : formulaire
+app.get('/catalogue/import', (req, res) => {
+  res.render('catalogue_import', {
+    message: null,
+    error: null,
+  });
+});
+
+// POST : traitement du fichier
+app.post('/catalogue/import', upload.single('fichier'), async (req, res) => {
+  const filePath = req.file ? req.file.path : null;
+
+  if (!filePath) {
+    return res.status(400).render('catalogue_import', {
+      message: null,
+      error: 'Merci de sélectionner un fichier Excel.',
+    });
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.readFile(filePath);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).render('catalogue_import', {
+      message: null,
+      error: 'Impossible de lire le fichier Excel.',
+    });
+  }
+
+  const sheet = workbook.worksheets[0];
+  let currentLot = null;
+  let inserted = 0;
+
+  const client = await receptionPool.connect();
+  try {
+    await client.query('BEGIN');
+    // on vide le catalogue actuel pour repartir propre
+    await client.query('DELETE FROM lot_tasks');
+
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      // on ignore la première ligne si c'est un titre
+      if (rowNumber === 1) return;
+
+      let lotCell = row.getCell(1).value;
+      let taskCell = row.getCell(2).value;
+
+      let lot = lotCell ? String(lotCell).trim() : '';
+      let task = taskCell ? String(taskCell).trim() : '';
+
+      if (lot) {
+        currentLot = lot;
+      }
+
+      if (!currentLot || !task) return;
+
+      client.query(
+        'INSERT INTO lot_tasks (lot, task) VALUES ($1, $2)',
+        [currentLot, task]
+      );
+      inserted++;
+    });
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+    return res.status(500).render('catalogue_import', {
+      message: null,
+      error: "Erreur pendant l'import du catalogue.",
+    });
+  } finally {
+    client.release();
+    fs.unlink(filePath, () => {});
+  }
+
+  res.render('catalogue_import', {
+    message: `Import terminé : ${inserted} tâches enregistrées dans le catalogue.`,
+    error: null,
+  });
+});
+
+// ---- APPLIQUER DES LOTS À UN CHANTIER ----
+// Formulaire
+app.get('/chantiers/:id/lots', async (req, res) => {
+  const chantierId = req.params.id;
+
+  // chantier
+  const chantierResult = await receptionPool.query(
+    `
+    SELECT id,
+           CASE
+             WHEN nom IS NOT NULL AND nom <> '' THEN nom
+             ELSE name
+           END AS display_name
+    FROM chantiers
+    WHERE id = $1
+    `,
+    [chantierId]
+  );
+  if (!chantierResult.rows.length) {
+    return res.status(404).send('Chantier introuvable');
+  }
+  const chantier = chantierResult.rows[0];
+
+  // floors / rooms
+  const floorsResult = await receptionPool.query(
+    'SELECT id, name FROM floors WHERE chantier_id = $1 ORDER BY name',
+    [chantierId]
+  );
+  const floors = floorsResult.rows;
+
+  const roomsResult = await receptionPool.query(
+    `
+    SELECT r.id, r.name, r.floor_id, f.name AS floor_name
+    FROM rooms r
+    JOIN floors f ON r.floor_id = f.id
+    WHERE f.chantier_id = $1
+    ORDER BY f.name, r.name
+    `,
+    [chantierId]
+  );
+  const rooms = roomsResult.rows;
+
+  // lots disponibles
+  const lotsResult = await receptionPool.query(
+    `
+    SELECT lot, COUNT(*) AS nb_tasks
+    FROM lot_tasks
+    GROUP BY lot
+    ORDER BY lot
+    `
+  );
+  const lots = lotsResult.rows;
+
+  res.render('chantier_lots', {
+    chantier,
+    floors,
+    rooms,
+    lots,
+    message: null,
+    error: null,
+  });
+});
+
+// Traitement : appliquer les lots sélectionnés
+app.post('/chantiers/:id/lots/apply', async (req, res) => {
+  const chantierId = req.params.id;
+  const { floor_id, room_ids, all_rooms_on_floor, lots } = req.body;
+  const user = req.session.user;
+
+  const chantierResult = await receptionPool.query(
+    `
+    SELECT id,
+           CASE
+             WHEN nom IS NOT NULL AND nom <> '' THEN nom
+             ELSE name
+           END AS display_name
+    FROM chantiers
+    WHERE id = $1
+    `,
+    [chantierId]
+  );
+  if (!chantierResult.rows.length) {
+    return res.status(404).send('Chantier introuvable');
+  }
+  const chantier = chantierResult.rows[0];
+
+  // recharge floors, rooms, lots pour ré-affichage en cas d'erreur
+  const floors = (await receptionPool.query(
+    'SELECT id, name FROM floors WHERE chantier_id = $1 ORDER BY name',
+    [chantierId]
+  )).rows;
+
+  const rooms = (await receptionPool.query(
+    `
+    SELECT r.id, r.name, r.floor_id, f.name AS floor_name
+    FROM rooms r
+    JOIN floors f ON r.floor_id = f.id
+    WHERE f.chantier_id = $1
+    ORDER BY f.name, r.name
+    `,
+    [chantierId]
+  )).rows;
+
+  const lotsList = (await receptionPool.query(
+    `
+    SELECT lot, COUNT(*) AS nb_tasks
+    FROM lot_tasks
+    GROUP BY lot
+    ORDER BY lot
+    `
+  )).rows;
+
+  if (!floor_id) {
+    return res.status(400).render('chantier_lots', {
+      chantier,
+      floors,
+      rooms,
+      lots: lotsList,
+      message: null,
+      error: "Veuillez sélectionner un étage.",
+    });
+  }
+
+  // traiter liste de lots
+  let lotsArray = [];
+  if (Array.isArray(lots)) lotsArray = lots;
+  else if (typeof lots === 'string') lotsArray = [lots];
+  lotsArray = lotsArray.filter(l => l && l.trim().length > 0);
+
+  if (!lotsArray.length) {
+    return res.status(400).render('chantier_lots', {
+      chantier,
+      floors,
+      rooms,
+      lots: lotsList,
+      message: null,
+      error: "Veuillez sélectionner au moins un lot.",
+    });
+  }
+
+  // déterminer les pièces ciblées
+  let roomIdsArray = [];
+  if (all_rooms_on_floor === 'on') {
+    // toutes les pièces de l'étage
+    const r = await receptionPool.query(
+      'SELECT id, name FROM rooms WHERE floor_id = $1 ORDER BY name',
+      [floor_id]
+    );
+    roomIdsArray = r.rows.map(rr => rr.id);
+  } else {
+    if (Array.isArray(room_ids)) roomIdsArray = room_ids;
+    else if (typeof room_ids === 'string') roomIdsArray = [room_ids];
+    roomIdsArray = roomIdsArray.filter(id => id && String(id).trim().length > 0);
+  }
+
+  if (!roomIdsArray.length) {
+    return res.status(400).render('chantier_lots', {
+      chantier,
+      floors,
+      rooms,
+      lots: lotsList,
+      message: null,
+      error: "Veuillez sélectionner au moins une pièce (ou cocher toutes les pièces de l'étage).",
+    });
+  }
+
+  const client = await receptionPool.connect();
+  let created = 0;
+  try {
+    await client.query('BEGIN');
+
+    // vérifier que l'étage appartient au chantier
+    const floorRes = await client.query(
+      'SELECT id, name FROM floors WHERE id = $1 AND chantier_id = $2',
+      [floor_id, chantierId]
+    );
+    if (!floorRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).render('chantier_lots', {
+        chantier,
+        floors,
+        rooms,
+        lots: lotsList,
+        message: null,
+        error: "Étage invalide pour ce chantier.",
+      });
+    }
+    const floor = floorRes.rows[0];
+
+    // préparer map lot -> tâches
+    const lotTasksMap = {};
+    for (const lot of lotsArray) {
+      const tasksRes = await client.query(
+        'SELECT task FROM lot_tasks WHERE lot = $1',
+        [lot]
+      );
+      lotTasksMap[lot] = tasksRes.rows.map(r => r.task);
+    }
+
+    // pour chaque pièce
+    for (const roomId of roomIdsArray) {
+      const roomRes = await client.query(
+        'SELECT id, name FROM rooms WHERE id = $1 AND floor_id = $2',
+        [roomId, floor.id]
+      );
+      if (!roomRes.rows.length) continue;
+      const room = roomRes.rows[0];
+
+      for (const lot of lotsArray) {
+        const tasks = lotTasksMap[lot] || [];
+        for (const task of tasks) {
+          await client.query(
+            `
+            INSERT INTO interventions (
+              user_id, old_floor_name, old_room_name,
+              lot, task, created_at, status, person, action,
+              floor_id, room_id
+            )
+            VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Création (catalogue)', $6, $7)
+            `,
+            [
+              user.email,
+              floor.name,
+              room.name,
+              lot,
+              task,
+              floor.id,
+              room.id,
+            ]
+          );
+          created++;
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+    return res.status(500).render('chantier_lots', {
+      chantier,
+      floors,
+      rooms,
+      lots: lotsList,
+      message: null,
+      error: "Erreur lors de l'application des lots.",
+    });
+  } finally {
+    client.release();
+  }
+
+  res.render('chantier_lots', {
+    chantier,
+    floors,
+    rooms,
+    lots: lotsList,
+    message: `Création terminée : ${created} interventions créées à partir du catalogue.`,
+    error: null,
+  });
+});
+
 // ----- AUTHENTIFICATION VIA CSV ----- //
+
 
 const USERS_CSV_PATH =
   process.env.USERS_CSV_PATH || path.join(__dirname, 'users.csv');
@@ -60,6 +421,7 @@ function loadUsersFromCsv() {
   const idxPrenom = header.indexOf('prenom');
   const idxEmail = header.indexOf('email');
   const idxPassword = header.indexOf('password');
+  const idxRole = header.indexOf('role');
 
   const users = [];
 
@@ -74,6 +436,10 @@ function loadUsersFromCsv() {
           : '',
       password:
         idxPassword >= 0 && cols[idxPassword] ? cols[idxPassword].trim() : '',
+        role:
+    idxRole >= 0 && cols[idxRole]
+      ? cols[idxRole].trim().toLowerCase()
+      : 'user',        // valeur par défaut
     });
   }
   return users;
@@ -97,6 +463,14 @@ function requireAuth(req, res, next) {
   }
   next();
 }
+
+function requireAdmin(req, res, next) {
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.status(403).send('Accès réservé aux administrateurs.');
+  }
+  next();
+}
+
 
 // mettre l'utilisateur courant + la liste des utilisateurs dispo dans les vues
 app.use((req, res, next) => {
@@ -125,6 +499,7 @@ app.post('/login', (req, res) => {
     email: user.email,
     nom: user.nom,
     prenom: user.prenom,
+    role: user.role || 'user',
   };
 
   res.redirect('/');
@@ -159,7 +534,91 @@ app.get('/', async (req, res) => {
   res.render('index', { chantiers: result.rows });
 });
 
-// Page de suivi des interventions pour un chantier
+// >>> AJOUTER CE BLOC <<<
+// Création d’un nouveau chantier
+app.post('/chantiers', requireAdmin,async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.redirect('/'); // on ne complique pas, on pourrait afficher un message si tu veux
+  }
+
+  await receptionPool.query(
+    `INSERT INTO chantiers (name, created_at) VALUES ($1, now())`,
+    [name.trim()]
+  );
+
+  res.redirect('/');
+});
+
+// Page de gestion des étages / chambres d'un chantier
+app.get('/chantiers/:id/structure', async (req, res) => {
+  const chantierId = req.params.id;
+
+  const chantierRes = await receptionPool.query(`
+    SELECT id,
+           CASE
+             WHEN nom IS NOT NULL AND nom <> '' THEN nom
+             ELSE name
+           END AS display_name
+    FROM chantiers
+    WHERE id = $1
+  `, [chantierId]);
+
+  if (!chantierRes.rows.length) {
+    return res.status(404).send('Chantier introuvable');
+  }
+  const chantier = chantierRes.rows[0];
+
+  const floors = (await receptionPool.query(
+    `SELECT id, name FROM floors WHERE chantier_id = $1 ORDER BY name`,
+    [chantierId]
+  )).rows;
+
+  const rooms = (await receptionPool.query(
+    `SELECT r.id, r.name, r.floor_id, f.name AS floor_name
+     FROM rooms r
+     JOIN floors f ON r.floor_id = f.id
+     WHERE f.chantier_id = $1
+     ORDER BY f.name, r.name`,
+    [chantierId]
+  )).rows;
+
+  res.render('chantier_structure', { chantier, floors, rooms });
+});
+
+// Création d’un étage
+app.post('/chantiers/:id/floors', requireAdmin,async (req, res) => {
+  const chantierId = req.params.id;
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.redirect(`/chantiers/${chantierId}/structure`);
+  }
+
+  await receptionPool.query(
+    `INSERT INTO floors (name, chantier_id) VALUES ($1, $2)`,
+    [name.trim(), chantierId]
+  );
+
+  res.redirect(`/chantiers/${chantierId}/structure`);
+});
+
+// Création d’une chambre / pièce dans un étage
+app.post('/floors/:floorId/rooms', requireAdmin,async (req, res) => {
+  const floorId = req.params.floorId;
+  const { name, chantier_id } = req.body; // on renvoie l'id du chantier dans le form
+
+  if (!name || !name.trim()) {
+    return res.redirect(`/chantiers/${chantier_id}/structure`);
+  }
+
+  await receptionPool.query(
+    `INSERT INTO rooms (name, floor_id) VALUES ($1, $2)`,
+    [name.trim(), floorId]
+  );
+
+  res.redirect(`/chantiers/${chantier_id}/structure`);
+});
+
 app.get('/chantiers/:id/taches', async (req, res) => {
   const chantierId = req.params.id;
   const filters = {
@@ -187,14 +646,14 @@ app.get('/chantiers/:id/taches', async (req, res) => {
   }
   const chantier = chantierResult.rows[0];
 
-  // récupérer les floors pour ce chantier
+  // floors
   const floorsResult = await receptionPool.query(
     `SELECT id, name FROM floors WHERE chantier_id = $1 ORDER BY name`,
     [chantierId]
   );
   const floors = floorsResult.rows;
 
-  // récupérer les rooms pour ce chantier
+  // rooms
   const roomsResult = await receptionPool.query(
     `
     SELECT r.id, r.name, r.floor_id, f.name AS floor_name
@@ -207,7 +666,7 @@ app.get('/chantiers/:id/taches', async (req, res) => {
   );
   const rooms = roomsResult.rows;
 
-  // construire la requête pour les interventions
+  // interventions filtrées
   let query = `
     SELECT i.*,
            f.name AS floor_name,
@@ -236,11 +695,47 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     query += ` AND i.status = $${params.length}`;
   }
 
-  query += `
-    ORDER BY f.name, r.name, i.created_at, i.id
-  `;
+  query += ` ORDER BY f.name, r.name, i.created_at, i.id`;
 
   const interventionsResult = await receptionPool.query(query, params);
+
+  // lots et tâches déjà utilisés
+  const lotsResult = await receptionPool.query(
+    `
+    SELECT DISTINCT i.lot
+    FROM interventions i
+    LEFT JOIN floors f ON i.floor_id = f.id
+    WHERE f.chantier_id = $1
+      AND i.lot IS NOT NULL
+      AND i.lot <> ''
+    ORDER BY i.lot
+    `,
+    [chantierId]
+  );
+
+  const tasksResult = await receptionPool.query(
+    `
+    SELECT DISTINCT i.task
+    FROM interventions i
+    LEFT JOIN floors f ON i.floor_id = f.id
+    WHERE f.chantier_id = $1
+      AND i.task IS NOT NULL
+      AND i.task <> ''
+    ORDER BY i.task
+    `,
+    [chantierId]
+  );
+
+  // 🔹 NOUVEAU : lots du catalogue
+  const catalogueLotsResult = await receptionPool.query(
+    `SELECT DISTINCT lot FROM lot_tasks ORDER BY lot`
+  );
+  const catalogueLots = catalogueLotsResult.rows;
+    const lotTasksResult = await receptionPool.query(
+    `SELECT lot, task FROM lot_tasks ORDER BY lot, task`
+  );
+  const lotTasks = lotTasksResult.rows;
+
 
   res.render('taches', {
     chantier,
@@ -248,9 +743,15 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     floors,
     rooms,
     filters,
+    lotsOptions: lotsResult.rows,
+    tasksOptions: tasksResult.rows,
+    catalogueLots,
+     lotTasks,   // ← envoyé à la vue
   });
 });
 
+
+// Changer le statut d'une intervention (A FAIRE / EN COURS / TERMINÉ)
 // Changer le statut d'une intervention (A FAIRE / EN COURS / TERMINÉ)
 app.post('/interventions/:id/status', async (req, res) => {
   const id = req.params.id;
@@ -262,6 +763,7 @@ app.post('/interventions/:id/status', async (req, res) => {
     return res.status(400).send('Statut invalide');
   }
 
+  // construire la liste de personnes sélectionnées
   let personsArray = [];
   if (Array.isArray(persons)) {
     personsArray = persons.filter((p) => p && p.trim().length > 0);
@@ -269,39 +771,146 @@ app.post('/interventions/:id/status', async (req, res) => {
     personsArray = [persons.trim()];
   }
 
-  // si personne choisie, on utilise la sélection,
-  // sinon on met l'utilisateur connecté
-  if (!personsArray.length) {
-    const name = `${actor.prenom || ''} ${actor.nom || ''}`.trim();
-    personsArray = [name || actor.email];
-  }
+  const actorName = `${actor.prenom || ''} ${actor.nom || ''}`.trim() || actor.email;
 
+  // si aucune personne sélectionnée, on met l'utilisateur courant
+  if (!personsArray.length) {
+    personsArray = [actorName];
+  }
   const personsText = personsArray.join(', ');
 
   const dateText =
     (date && date.trim().length > 0 ? date.trim() : new Date().toISOString().slice(0, 10));
 
-  let actionText = '';
-  if (new_status === 'a faire') {
-    actionText = `Réinitialisé le ${dateText} par ${actor.prenom || ''} ${actor.nom || ''}`.trim();
-  } else if (new_status === 'en cours') {
-    actionText = `En cours depuis le ${dateText} (par ${actor.prenom || ''} ${actor.nom || ''})`.trim();
-  } else if (new_status === 'terminé') {
-    actionText = `Terminé le ${dateText} (validé par ${actor.prenom || ''} ${actor.nom || ''})`.trim();
+  const client = await receptionPool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // récupérer l'état actuel de l'intervention
+    const currentRes = await client.query(
+      'SELECT status, person, action FROM interventions WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (!currentRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).send("Intervention introuvable");
+    }
+    const current = currentRes.rows[0];
+
+    // on construit la nouvelle phrase d'action
+    let eventText = '';
+    let newPerson = current.person; // par défaut on garde l'ancien "Qui ?"
+
+    if (new_status === 'a faire') {
+      eventText = `Réinitialisé le ${dateText} par ${actorName}`;
+    } else if (new_status === 'en cours') {
+      eventText = `En cours depuis le ${dateText} (par ${personsText})`;
+      newPerson = personsText; // ici on met à jour le "Qui ?" (ceux qui font la tâche)
+    } else if (new_status === 'terminé' && (!actor || actor.role !== 'admin')) {
+  // la validation doit toujours être faite par la personne connectée
+  eventText = `Terminé le ${dateText} (validé par ${actorName})`;
+  // on laisse newPerson = current.person pour garder "qui a fait la tâche"
+}
+
+    const newAction =
+      (current.action && current.action.length ? current.action + '\n' : '') + eventText;
+
+    // mise à jour de l'intervention (on empile l'action)
+    await client.query(
+      `
+      UPDATE interventions
+      SET status = $1,
+          person = $2,
+          action = $3
+      WHERE id = $4
+      `,
+      [new_status, newPerson, newAction, id]
+    );
+
+    // enregistrement dans la table d'historique
+    await client.query(
+      `
+      INSERT INTO intervention_history (
+        intervention_id, event_type,
+        old_status, new_status,
+        persons, date_event,
+        actor_email, actor_name,
+        note
+      )
+      VALUES ($1, 'status_change',
+              $2, $3,
+              $4, $5,
+              $6, $7,
+              $8)
+      `,
+      [
+        id,
+        current.status,
+        new_status,
+        personsText,
+        dateText,
+        actor.email,
+        actorName,
+        eventText,
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+    return res.status(500).send("Erreur lors du changement de statut.");
+  } finally {
+    client.release();
   }
 
-  await receptionPool.query(
+  res.redirect('back');
+});
+
+// Historique complet d'une intervention
+app.get('/interventions/:id/history', async (req, res) => {
+  const id = req.params.id;
+
+  // récupérer l'intervention + chantier
+  const interventionRes = await receptionPool.query(
     `
-    UPDATE interventions
-    SET status = $1,
-        person = $2,
-        action = $3
-    WHERE id = $4
+    SELECT i.*,
+           f.name AS floor_name,
+           r.name AS room_name,
+           c.id AS chantier_id,
+           CASE
+             WHEN c.nom IS NOT NULL AND c.nom <> '' THEN c.nom
+             ELSE c.name
+           END AS chantier_name
+    FROM interventions i
+    LEFT JOIN floors f ON i.floor_id = f.id
+    LEFT JOIN rooms r ON i.room_id = r.id
+    LEFT JOIN chantiers c ON f.chantier_id = c.id
+    WHERE i.id = $1
     `,
-    [new_status, personsText, actionText, id]
+    [id]
   );
 
-  res.redirect('back');
+  if (!interventionRes.rows.length) {
+    return res.status(404).send("Intervention introuvable");
+  }
+  const intervention = interventionRes.rows[0];
+
+  // récupérer l'historique
+  const historyRes = await receptionPool.query(
+    `
+    SELECT *
+    FROM intervention_history
+    WHERE intervention_id = $1
+    ORDER BY created_at
+    `,
+    [id]
+  );
+
+  res.render('intervention_history', {
+    intervention,
+    history: historyRes.rows,
+  });
 });
 
 // Création manuelle d'une intervention (avec choix multiple de pièces)
@@ -559,6 +1168,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     error: null,
   });
 });
+
 
 // ----- DEMARRAGE ----- //
 const PORT = process.env.PORT || 3000;
