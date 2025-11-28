@@ -5,8 +5,8 @@
     <title>Import Excel - Gestion des tâches</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <header>
+  <body class="app-body">
+    <header class="app-header">
       <h1>Import Excel - Tâches chantiers</h1>
       <div class="user-info">
         Connecté en tant que
@@ -16,9 +16,12 @@
       </div>
     </header>
 
-    <main>
-      <section>
-        <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+    <main class="page-shell">
+      <section class="card">
+        <div class="section-heading with-actions">
+          <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
+          <h2>Importer un fichier Excel de tâches</h2>
+        </div>
 
         <% if (error) { %>
           <div class="alert"><%= error %></div>
@@ -26,8 +29,6 @@
         <% if (message) { %>
           <div class="success"><%= message %></div>
         <% } %>
-
-        <h2>Importer un fichier Excel de tâches</h2>
 
         <form method="post" action="/import" enctype="multipart/form-data" class="import-form">
           <label>Chantier

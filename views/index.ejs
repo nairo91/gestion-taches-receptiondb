@@ -5,8 +5,8 @@
     <title>Chantiers - Gestion des tâches</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <header>
+  <body class="app-body">
+    <header class="app-header">
       <h1>Gestion des tâches chantiers</h1>
       <div class="user-info">
         Connecté en tant que
@@ -16,11 +16,14 @@
       </div>
     </header>
 
-    <main>
-      <section>
-        <h2>Chantiers</h2>
+    <main class="page-shell">
+      <section class="card">
+        <div class="section-heading">
+          <h2>Chantiers</h2>
+          <a class="btn" href="/import">Importer un fichier Excel de tâches</a>
+        </div>
         <% if (!chantiers.length) { %>
-          <p>Aucun chantier dans la base.</p>
+          <p class="empty-state">Aucun chantier dans la base.</p>
         <% } else { %>
           <table class="table">
             <thead>
@@ -37,30 +40,28 @@
                   <td><%= c.id %></td>
                   <td><%= c.display_name %></td>
                   <td><%= c.created_at ? c.created_at.toISOString().slice(0,10) : '' %></td>
-                  <td>
-                    <a href="/chantiers/<%= c.id %>/taches">Suivi des tâches</a>
-                      <a href="/chantiers/<%= c.id %>/structure">Structure (étages / chambres)</a>
+                  <td class="table-actions">
+                    <a class="btn btn-link" href="/chantiers/<%= c.id %>/taches">Suivi des tâches</a>
+                    <a class="btn btn-link" href="/chantiers/<%= c.id %>/structure">Structure (étages / chambres)</a>
                   </td>
                 </tr>
               <% }) %>
             </tbody>
           </table>
         <% } %>
-
-        <p>
-          <a class="btn" href="/import">Importer un fichier Excel de tâches</a>
-        </p>
       </section>
-      <h2>Ajouter un chantier</h2>
-<form method="post" action="/chantiers" class="add-task-form">
-  <label>Nom du chantier
-    <input type="text" name="name" required />
-  </label>
-  <button type="submit" class="btn">Créer le chantier</button>
-</form>
 
-
-
+      <section class="card">
+        <div class="section-heading">
+          <h2>Ajouter un chantier</h2>
+        </div>
+        <form method="post" action="/chantiers" class="add-task-form compact-form">
+          <label>Nom du chantier
+            <input type="text" name="name" required />
+          </label>
+          <button type="submit" class="btn">Créer le chantier</button>
+        </form>
+      </section>
     </main>
   </body>
 </html>
