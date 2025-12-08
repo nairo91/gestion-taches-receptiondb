@@ -1060,15 +1060,9 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    // 1) On verrouille UNIQUEMENT la ligne dans interventions
     const currentRes = await client.query(
-      `
-      SELECT i.*, f.chantier_id, f.name AS floor_name, r.name AS room_name
-      FROM interventions i
-      LEFT JOIN floors f ON i.floor_id = f.id
-      LEFT JOIN rooms r ON i.room_id = r.id
-      WHERE i.id = $1
-      FOR UPDATE
-      `,
+      `SELECT * FROM interventions WHERE id = $1 FOR UPDATE`,
       [id]
     );
 
@@ -1078,6 +1072,16 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
     }
 
     const current = currentRes.rows[0];
+
+    // 2) On récupère le chantier_id via l'étage de l'intervention
+    let chantierId = null;
+    if (current.floor_id) {
+      const chantierRes = await client.query(
+        `SELECT chantier_id FROM floors WHERE id = $1`,
+        [current.floor_id]
+      );
+      chantierId = chantierRes.rows[0]?.chantier_id || null;
+    }
 
     // --- Gestion du "Qui ?" ---
     let personsArray = [];
@@ -1193,7 +1197,11 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
 
     await client.query('COMMIT');
 
-    return res.redirect(`/chantiers/${current.chantier_id}/taches`);
+    // si on n'a pas réussi à retrouver le chantier, on renvoie vers /
+    if (!chantierId) {
+      return res.redirect('/');
+    }
+    return res.redirect(`/chantiers/${chantierId}/taches`);
   } catch (err) {
     console.error(err);
     await client.query('ROLLBACK');
@@ -1202,6 +1210,7 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
     client.release();
   }
 });
+
 
 
 // Création manuelle d'une intervention (avec choix multiple de pièces)
