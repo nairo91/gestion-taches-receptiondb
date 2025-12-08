@@ -419,3 +419,59 @@ main a:not(.btn):hover {
     flex-wrap: wrap;
   }
 }
+
+.multi-dropdown {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.multi-dropdown-toggle {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multi-dropdown-toggle::after {
+  content: "▾";
+  float: right;
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.multi-dropdown-panel {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+  padding: 6px 8px;
+  display: none; /* caché par défaut */
+}
+
+.multi-dropdown.open .multi-dropdown-panel {
+  display: block;
+}
+
+.multi-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 0.9rem;
+}
+
+.multi-dropdown-option input[type="checkbox"] {
+  margin: 0;
+}
+
