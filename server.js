@@ -536,19 +536,24 @@ app.get('/', async (req, res) => {
 
 // >>> AJOUTER CE BLOC <<<
 // Création d’un nouveau chantier
-app.post('/chantiers', requireAdmin,async (req, res) => {
+// Création d’un nouveau chantier
+app.post('/chantiers', requireAdmin, async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) {
-    return res.redirect('/'); // on ne complique pas, on pourrait afficher un message si tu veux
+    return res.redirect('/');
   }
 
+  const trimmed = name.trim();
+
   await receptionPool.query(
-    `INSERT INTO chantiers (name, created_at) VALUES ($1, now())`,
-    [name.trim()]
+    `INSERT INTO chantiers (nom, name, created_at)
+     VALUES ($1, $1, now())`,
+    [trimmed]
   );
 
   res.redirect('/');
 });
+
 
 // Page de gestion des étages / chambres d'un chantier
 app.get('/chantiers/:id/structure', async (req, res) => {
