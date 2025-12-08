@@ -780,6 +780,9 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     lotTasks,   // ← bien envoyé à la vue
   });
 
+  });
+
+
 
 
 
