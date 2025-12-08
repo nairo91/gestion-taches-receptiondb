@@ -1046,10 +1046,9 @@ app.get('/interventions/:id/edit', requireAdmin, async (req, res) => {
   }
 });
 
-// Traitement du formulaire d'édition
 app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
   const id = req.params.id;
-  const { floor_id, room_id, lot, task } = req.body;
+  const { floor_id, room_id, lot, task, persons, date } = req.body;
   const actor = req.session.user;
 
   if (!lot || !task) {
@@ -1063,9 +1062,10 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
 
     const currentRes = await client.query(
       `
-      SELECT i.*, f.chantier_id
+      SELECT i.*, f.chantier_id, f.name AS floor_name, r.name AS room_name
       FROM interventions i
       LEFT JOIN floors f ON i.floor_id = f.id
+      LEFT JOIN rooms r ON i.room_id = r.id
       WHERE i.id = $1
       FOR UPDATE
       `,
@@ -1079,31 +1079,68 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
 
     const current = currentRes.rows[0];
 
-    // Mise à jour de l'intervention
+    // --- Gestion du "Qui ?" ---
+    let personsArray = [];
+    if (Array.isArray(persons)) {
+      personsArray = persons.filter(p => p && p.trim().length > 0);
+    } else if (typeof persons === 'string' && persons.trim().length > 0) {
+      personsArray = [persons.trim()];
+    }
+
+    // si vide → on garde l'ancien person
+    const newPerson = personsArray.length
+      ? personsArray.join(', ')
+      : current.person;
+
+    const actorName =
+      `${actor.prenom || ''} ${actor.nom || ''}`.trim() || actor.email;
+    const dateText =
+      (date && date.trim().length > 0
+        ? date.trim()
+        : new Date().toISOString().slice(0, 10));
+
+    // --- Construire la note de correction Qui/Quand ---
+    let correctionParts = [];
+    if (personsArray.length) {
+      correctionParts.push(`Qui = ${newPerson}`);
+    }
+    if (date) {
+      correctionParts.push(`Quand = ${dateText}`);
+    }
+    const correctionText = correctionParts.length
+      ? `Correction Qui/Quand le ${dateText} par ${actorName} (${correctionParts.join(' | ')})`
+      : '';
+
+    const newAction = correctionText
+      ? ((current.action && current.action.length ? current.action + '\n' : '') + correctionText)
+      : current.action;
+
+    // --- Modifs sur lot / tâche / étage / pièce ---
     await client.query(
       `
       UPDATE interventions
       SET floor_id = $1,
           room_id = $2,
-          lot = $3,
-          task = $4
-      WHERE id = $5
+          lot     = $3,
+          task    = $4,
+          person  = $5,
+          action  = $6
+      WHERE id = $7
       `,
       [
         floor_id || null,
         room_id || null,
         lot,
         task,
+        newPerson,
+        newAction,
         id,
       ]
     );
 
-    // On log dans l'historique
-    const actorName =
-      `${actor.prenom || ''} ${actor.nom || ''}`.trim() || actor.email;
-    const dateText = new Date().toISOString().slice(0, 10);
-
+    // --- Log dans l'historique ---
     const changes = [];
+
     if (current.lot !== lot) {
       changes.push(`Lot : « ${current.lot || ''} » → « ${lot} »`);
     }
@@ -1115,6 +1152,12 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
     }
     if (String(current.room_id || '') !== String(room_id || '')) {
       changes.push('Pièce modifiée');
+    }
+    if (newPerson !== current.person) {
+      changes.push(`Qui : « ${current.person || ''} » → « ${newPerson} »`);
+    }
+    if (date) {
+      changes.push(`Quand fixé à ${dateText}`);
     }
 
     const note = changes.length
@@ -1140,7 +1183,7 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
         id,
         current.status,
         current.status,
-        current.person,
+        newPerson,
         dateText,
         actor.email,
         actorName,
@@ -1159,6 +1202,7 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
     client.release();
   }
 });
+
 
 // Création manuelle d'une intervention (avec choix multiple de pièces)
 app.post('/chantiers/:chantierId/interventions', async (req, res) => {
