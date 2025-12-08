@@ -215,6 +215,12 @@
         </form>
       </section>
     </main>
+
+<script>
+  // données LOT / Tâche envoyées par le serveur
+  const LOT_TASKS = <%- JSON.stringify(lotTasks || []) %>;
+</script>
+
 <script>
   // données des pièces (à réutiliser dans plusieurs scripts)
   const ROOMS_DATA = JSON.parse('<%- JSON.stringify(rooms || []) %>');
@@ -222,8 +228,8 @@
 
 <script>
   (function () {
-    // données envoyées par le serveur
-    const lotTasks = JSON.parse('<%- JSON.stringify(lotTasks || []) %>');
+    // données envoyées par le serveur (voir script LOT_TASKS plus haut)
+    const lotTasks = Array.isArray(LOT_TASKS) ? LOT_TASKS : [];
 
     // construire map lot -> [tâches]
     const tasksByLot = {};
@@ -253,12 +259,20 @@
 
       const defaultOpt = document.createElement('option');
       defaultOpt.value = '';
-      defaultOpt.textContent = lot
-        ? '-- Choisir une tâche --'
-        : '-- Choisir un LOT d\'abord --';
-      taskSelect.appendChild(defaultOpt);
+      if (!lot) {
+        defaultOpt.textContent = "-- Choisir un LOT d'abord --";
+        taskSelect.appendChild(defaultOpt);
+        return;
+      }
 
-      if (!lot || !tasksByLot[lot]) return;
+      if (!tasksByLot[lot] || !tasksByLot[lot].length) {
+        defaultOpt.textContent = "Aucune tâche définie pour ce LOT";
+        taskSelect.appendChild(defaultOpt);
+        return;
+      }
+
+      defaultOpt.textContent = "-- Choisir une tâche --";
+      taskSelect.appendChild(defaultOpt);
 
       tasksByLot[lot].forEach(task => {
         const opt = document.createElement('option');
