@@ -198,14 +198,23 @@
             </select>
           </label>
 
-          <label>Pièces (choix multiple)
-            <select name="room_ids" multiple size="6" required>
-              <% rooms.forEach(r => { %>
-                <option value="<%= r.id %>"><%= r.floor_name %> - <%= r.name %></option>
-              <% }) %>
-            </select>
-            <span class="help">Ctrl+clic ou Maj+clic pour sélectionner plusieurs pièces.</span>
-          </label>
+       <label>Pièces (choix multiple)
+  <div class="multi-dropdown" data-multi-dropdown data-rooms-dropdown>
+    <button type="button" class="multi-dropdown-toggle">
+      Sélectionner les pièces...
+    </button>
+    <div class="multi-dropdown-panel">
+      <% rooms.forEach(r => { %>
+        <label class="multi-dropdown-option" data-room-floor="<%= r.floor_id %>">
+          <input type="checkbox" name="room_ids" value="<%= r.id %>">
+          <span><%= r.floor_name %> - <%= r.name %></span>
+        </label>
+      <% }) %>
+    </div>
+  </div>
+  <span class="help">Choix multiple possible.</span>
+</label>
+
 
           <label>Lot
             <select name="lot" required>
@@ -308,40 +317,43 @@
 
 <script>
   (function () {
-    // Toutes les pièces avec leur étage
-    const rooms = JSON.parse('<%- JSON.stringify(rooms || []) %>');
-
     const form = document.querySelector('form.add-task-form');
     if (!form) return;
 
-    const floorSelect = form.querySelector('select[name="floor_id"]');
-    const roomSelect  = form.querySelector('select[name="room_ids"]');
-    if (!floorSelect || !roomSelect) return;
+    const floorSelect   = form.querySelector('select[name="floor_id"]');
+    const roomsDropdown = form.querySelector('[data-rooms-dropdown]');
+    if (!floorSelect || !roomsDropdown) return;
+
+    const panel = roomsDropdown.querySelector('.multi-dropdown-panel');
 
     function refreshRooms() {
       const floorId = floorSelect.value;
 
-      // vider la liste actuelle
-      while (roomSelect.firstChild) {
-        roomSelect.removeChild(roomSelect.firstChild);
-      }
+      const options = panel.querySelectorAll('.multi-dropdown-option');
 
-      // pièces de l'étage sélectionné
-      const filtered = rooms.filter(r => String(r.floor_id) === String(floorId));
+      options.forEach(opt => {
+        const optFloorId = opt.getAttribute('data-room-floor');
+        const checkbox   = opt.querySelector('input[type="checkbox"]');
 
-      filtered.forEach(r => {
-        const opt = document.createElement('option');
-        opt.value = r.id;
-        opt.textContent = r.floor_name + ' - ' + r.name;
-        roomSelect.appendChild(opt);
+        if (!floorId || String(optFloorId) === String(floorId)) {
+          opt.style.display = '';
+        } else {
+          opt.style.display = 'none';
+          if (checkbox) checkbox.checked = false; // on décoche si on cache
+        }
       });
+
+      // force la mise à jour du texte du bouton (script multi-dropdown)
+      const event = new Event('change', { bubbles: true });
+      panel.dispatchEvent(event);
     }
 
     floorSelect.addEventListener('change', refreshRooms);
-    // première initialisation (avec l'étage par défaut du select)
+    // init
     refreshRooms();
   })();
 </script>
+
 
 <script>
   (function () {
@@ -415,19 +427,25 @@
     DROPDOWNS.forEach(drop => {
       const toggle = drop.querySelector('.multi-dropdown-toggle');
       const panel  = drop.querySelector('.multi-dropdown-panel');
-      const checkboxes = panel.querySelectorAll('input[type="checkbox"]');
+
+      function getCheckboxes() {
+        return panel.querySelectorAll('input[type="checkbox"]');
+      }
 
       function updateLabel() {
-        const selected = Array.from(checkboxes)
+        const checkboxes = Array.from(getCheckboxes());
+        const selected = checkboxes
           .filter(c => c.checked)
           .map(c => c.nextElementSibling.textContent.trim());
 
         if (!selected.length) {
+          // texte par défaut, tu peux adapter par dropdown en mettant
+          // directement le texte dans le bouton dans le HTML
           toggle.textContent = 'Sélectionner...';
         } else if (selected.length === 1) {
           toggle.textContent = selected[0];
         } else {
-          toggle.textContent = selected.length + ' personnes sélectionnées';
+          toggle.textContent = selected.length + ' éléments sélectionnés';
         }
       }
 
@@ -436,18 +454,22 @@
         drop.classList.toggle('open');
       });
 
-      checkboxes.forEach(cb => {
-        cb.addEventListener('change', updateLabel);
+      // on écoute les changements via délégation => marche même si on
+      // recrée les checkboxes (cas des pièces filtrées par étage)
+      panel.addEventListener('change', (e) => {
+        if (e.target.matches('input[type="checkbox"]')) {
+          updateLabel();
+        }
       });
 
-      // fermeture en cliquant à l’extérieur
+      // clic à l’extérieur -> fermer
       document.addEventListener('click', (e) => {
         if (!drop.contains(e.target)) {
           drop.classList.remove('open');
         }
       });
 
-      // init au chargement (au cas où des cases seraient pré-cochées un jour)
+      // init
       updateLabel();
     });
   })();
