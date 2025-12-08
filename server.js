@@ -180,15 +180,18 @@ app.get('/chantiers/:id/lots', async (req, res) => {
   );
   const rooms = roomsResult.rows;
 
-  // lots disponibles
+  // lots disponibles pour CE chantier
   const lotsResult = await receptionPool.query(
     `
     SELECT lot, COUNT(*) AS nb_tasks
-    FROM lot_tasks
+    FROM chantier_lot_tasks
+    WHERE chantier_id = $1
     GROUP BY lot
     ORDER BY lot
-    `
+    `,
+    [chantierId]
   );
+
   const lots = lotsResult.rows;
 
   res.render('chantier_lots', {
@@ -241,14 +244,19 @@ app.post('/chantiers/:id/lots/apply', async (req, res) => {
     [chantierId]
   )).rows;
 
-  const lotsList = (await receptionPool.query(
-    `
-    SELECT lot, COUNT(*) AS nb_tasks
-    FROM lot_tasks
-    GROUP BY lot
-    ORDER BY lot
-    `
-  )).rows;
+  const lotsList = (
+    await receptionPool.query(
+      `
+      SELECT lot, COUNT(*) AS nb_tasks
+      FROM chantier_lot_tasks
+      WHERE chantier_id = $1
+      GROUP BY lot
+      ORDER BY lot
+      `,
+      [chantierId]
+    )
+  ).rows;
+
 
   if (!floor_id) {
     return res.status(400).render('chantier_lots', {
@@ -327,15 +335,21 @@ app.post('/chantiers/:id/lots/apply', async (req, res) => {
     }
     const floor = floorRes.rows[0];
 
-    // préparer map lot -> tâches
+    // préparer map lot -> tâches à partir du catalogue du chantier
     const lotTasksMap = {};
     for (const lot of lotsArray) {
       const tasksRes = await client.query(
-        'SELECT task FROM lot_tasks WHERE lot = $1',
-        [lot]
+        `
+        SELECT task
+        FROM chantier_lot_tasks
+        WHERE chantier_id = $1
+          AND lot = $2
+        `,
+        [chantierId, lot]
       );
-      lotTasksMap[lot] = tasksRes.rows.map(r => r.task);
+      lotTasksMap[lot] = tasksRes.rows.map((r) => r.task);
     }
+
 
     // pour chaque pièce
     for (const roomId of roomIdsArray) {
