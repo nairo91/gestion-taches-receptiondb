@@ -111,6 +111,11 @@
                     Info
                   </a>
 
+                   <a href="/interventions/<%= i.id %>/edit"
+                    class="btn btn-small">
+                    Modifier
+                  </a>
+
                   <% if (i.status !== 'terminé') { %>
                     <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
                       <input type="hidden" name="new_status" value="en cours" />
