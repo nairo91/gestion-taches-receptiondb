@@ -5,65 +5,101 @@
     <title>Historique de la tâche</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <header>
+  <body class="app-body">
+    <header class="app-header">
       <h1>Historique de la tâche</h1>
-      <p>
-        Chantier : <strong><%= intervention.chantier_name %></strong><br />
-        Étape : <%= intervention.floor_name || intervention.old_floor_name %> -
-        Pièce : <%= intervention.room_name || intervention.old_room_name %><br />
-        Lot : <strong><%= intervention.lot %></strong><br />
-        Tâche : <strong><%= intervention.task %></strong>
-      </p>
-      <p>
+    </header>
+
+    <main class="page-shell">
+      <section class="card">
+        <p>
+          <strong>Chantier :</strong> <%= intervention.chantier_name %><br />
+          <strong>Étage :</strong> <%= intervention.floor_name || intervention.old_floor_name || '-' %> - 
+          <strong>Pièce :</strong> <%= intervention.room_name || intervention.old_room_name || '-' %><br />
+          <strong>Lot :</strong> <%= intervention.lot || '-' %><br />
+          <strong>Tâche :</strong> <%= intervention.task || '-' %>
+        </p>
+
         <a href="/chantiers/<%= intervention.chantier_id %>/taches" class="btn btn-secondary">
           ← Retour aux tâches
         </a>
-      </p>
-    </header>
+      </section>
 
-    <main>
-      <h2>Historique des actions</h2>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Date enregistrement</th>
-            <th>Type</th>
-            <th>Ancien statut</th>
-            <th>Nouveau statut</th>
-            <th>Personnes</th>
-            <th>Date de l'action</th>
-            <th>Acteur</th>
-            <th>Détail</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Ligne de création (à partir de l'intervention) -->
-          <tr>
-            <td><%= intervention.created_at ? intervention.created_at.toISOString().slice(0,10) : '' %></td>
-            <td>création</td>
-            <td></td>
-            <td><%= intervention.status %></td>
-            <td><%= intervention.person || '' %></td>
-            <td><%= intervention.created_at ? intervention.created_at.toISOString().slice(0,10) : '' %></td>
-            <td><%= intervention.user_id || '' %></td>
-            <td><%= intervention.action || 'Création' %></td>
-          </tr>
+      <section class="card">
+        <h2>Historique des actions</h2>
 
-          <% history.forEach(h => { %>
+        <table class="table">
+          <thead>
             <tr>
-              <td><%= h.created_at.toISOString().slice(0,10) %></td>
-              <td><%= h.event_type %></td>
-              <td><%= h.old_status || '' %></td>
-              <td><%= h.new_status || '' %></td>
-              <td><%= h.persons || '' %></td>
-              <td><%= h.date_event || '' %></td>
-              <td><%= h.actor_name || h.actor_email || '' %></td>
-              <td><%= h.note || '' %></td>
+              <th>Date enregistrement</th>
+              <th>Type</th>
+              <th>Ancien statut</th>
+              <th>Nouveau statut</th>
+              <th>Personnes</th>
+              <th>Date de l'action</th>
+              <th>Acteur</th>
+              <th>Détail</th>
             </tr>
-          <% }) %>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <% if (!history.length) { %>
+              <tr>
+                <td colspan="8" class="empty-state">
+                  Aucun historique pour cette tâche.
+                </td>
+              </tr>
+            <% } %>
+
+            <% history.forEach(h => { %>
+              <% 
+                const createdAt  = h.created_at ? new Date(h.created_at) : null;
+                const dateEvent  = h.date_event ? new Date(h.date_event) : null;
+                const createdFr  = createdAt ? createdAt.toLocaleDateString('fr-FR') : '';
+                const eventFr    = dateEvent ? dateEvent.toLocaleDateString('fr-FR') : '';
+              %>
+              <tr class="<%= h.event_type === 'edit' ? 'history-row-edit' : '' %>">
+                <td><%= createdFr %></td>
+                <td><%= h.event_type %></td>
+                <td><%= h.old_status || '' %></td>
+                <td><%= h.new_status || '' %></td>
+                <td><%= h.persons || '' %></td>
+                <td><%= eventFr %></td>
+                <td>
+                  <div><strong><%= h.actor_name || '' %></strong></div>
+                  <div><small><%= h.actor_email || '' %></small></div>
+                </td>
+                <td class="history-detail-cell">
+                  <% if (h.event_type === 'edit') { %>
+                    <% 
+                      const note = (h.note || '').replace(/^Modification de la tâche\s*:\s*/i, '');
+                      const parts = note.split('|').map(p => p.trim()).filter(Boolean);
+                    %>
+                    <ul class="history-changes">
+                      <% parts.forEach(p => { 
+                           const arrowIndex = p.indexOf('→');
+                      %>
+                        <li>
+                          <% if (arrowIndex !== -1) { 
+                               const before = p.slice(0, arrowIndex).trim();
+                               const after  = p.slice(arrowIndex + 1).trim();
+                          %>
+                            <span class="change-before"><%= before %> →</span>
+                            <span class="change-after"><%= ' ' + after %></span>
+                          <% } else { %>
+                            <span><%= p %></span>
+                          <% } %>
+                        </li>
+                      <% }) %>
+                    </ul>
+                  <% } else { %>
+                    <%= h.note || '' %>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </section>
     </main>
   </body>
 </html>
