@@ -704,7 +704,7 @@ app.get('/chantiers/:id/taches', async (req, res) => {
 
   const interventionsResult = await receptionPool.query(query, params);
 
-  // lots et tâches déjà utilisés
+   // lots et tâches déjà utilisés (pour les filtres éventuels, si tu veux les garder)
   const lotsResult = await receptionPool.query(
     `
     SELECT DISTINCT i.lot
@@ -731,11 +731,11 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     [chantierId]
   );
 
-  // 🔹 Catalogue LOT/Tâche POUR CE CHANTIER
+  // 🔹 Nouveau : catalogue LOT / Tâche spécifique à ce chantier
   const catalogueLotsResult = await receptionPool.query(
     `
     SELECT DISTINCT lot
-    FROM lot_tasks_chantier
+    FROM chantier_lot_tasks
     WHERE chantier_id = $1
     ORDER BY lot
     `,
@@ -746,7 +746,7 @@ app.get('/chantiers/:id/taches', async (req, res) => {
   const lotTasksResult = await receptionPool.query(
     `
     SELECT lot, task
-    FROM lot_tasks_chantier
+    FROM chantier_lot_tasks
     WHERE chantier_id = $1
     ORDER BY lot, task
     `,
@@ -763,9 +763,9 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     lotsOptions: lotsResult.rows,
     tasksOptions: tasksResult.rows,
     catalogueLots,
-    lotTasks,
+    lotTasks,   // ← bien envoyé à la vue
   });
-});
+
 
 
 
@@ -1032,8 +1032,7 @@ app.get('/import', async (req, res) => {
   });
 });
 
-// Traitement de l'import Excel : alimente le catalogue LOT / Tâche
-// Traitement de l'import Excel : alimente le catalogue LOT / Tâche DU CHANTIER CHOISI
+// Traitement de l'import Excel : alimente le catalogue LOT / Tâche POUR UN CHANTIER
 app.post('/import', upload.single('fichier'), async (req, res) => {
   const chantierId = req.body.chantier_id;
   const filePath = req.file ? req.file.path : null;
@@ -1074,13 +1073,14 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
   const sheet = workbook.worksheets[0];
 
-  // A = LOT (peut être vide -> on reprend le dernier non vide)
-  // B = Tâche
+  // Col A = LOT (peut être vide -> on reprend le dernier LOT non vide)
+  // Col B = Tâche
   let currentLot = null;
-  const pairs = new Set(); // (lot, task) uniques
+  const pairs = new Set();
 
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return; // en-tête
+    // Ligne 1 = en-tête "LOT | Travaux chambre ..."
+    if (rowNumber === 1) return;
 
     const lotCell = row.getCell(1).value;
     const taskCell = row.getCell(2).value;
@@ -1088,11 +1088,13 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     const lot = lotCell ? String(lotCell).trim() : '';
     const task = taskCell ? String(taskCell).trim() : '';
 
+    // si la cellule LOT est remplie on met à jour le "currentLot"
     if (lot) currentLot = lot;
 
+    // si pas de lot courant ou pas de tâche -> on ignore
     if (!currentLot || !task) return;
 
-    // si ta 1ère ligne de la colonne B est un titre type "Travaux chambre ..."
+    // on ignore la ligne de titre "Travaux chambre ...."
     if (/^travaux chambre/i.test(task)) return;
 
     const key = `${currentLot}|||${task}`;
@@ -1105,9 +1107,9 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 🔁 On écrase le catalogue de ce chantier uniquement
+    // on efface le catalogue du chantier pour repartir propre
     await client.query(
-      'DELETE FROM lot_tasks_chantier WHERE chantier_id = $1',
+      'DELETE FROM chantier_lot_tasks WHERE chantier_id = $1',
       [chantierId]
     );
 
@@ -1116,7 +1118,7 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
       await client.query(
         `
-        INSERT INTO lot_tasks_chantier (chantier_id, lot, task)
+        INSERT INTO chantier_lot_tasks (chantier_id, lot, task)
         VALUES ($1, $2, $3)
         ON CONFLICT (chantier_id, lot, task) DO NOTHING
         `,
@@ -1140,7 +1142,8 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
   }
 
   const chantierLabel =
-    chantiers.find(c => String(c.id) === String(chantierId))?.display_name || '';
+    chantiers.find((c) => String(c.id) === String(chantierId))?.display_name ||
+    '';
   const chantierInfo = chantierLabel
     ? ` pour le chantier « ${chantierLabel} »`
     : '';
