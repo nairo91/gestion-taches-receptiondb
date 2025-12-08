@@ -903,7 +903,7 @@ app.post('/interventions/:id/status', async (req, res) => {
 });
 
 // Historique complet d'une intervention
-app.get('/interventions/:id/history', async (req, res) => {
+app.get('/interventions/:id/history',requireAdmin, async (req, res) => {
   const id = req.params.id;
 
   // récupérer l'intervention + chantier
@@ -946,6 +946,218 @@ app.get('/interventions/:id/history', async (req, res) => {
     intervention,
     history: historyRes.rows,
   });
+});
+
+
+// --- ÉDITER UNE INTERVENTION ---
+
+// Formulaire d'édition
+app.get('/interventions/:id/edit', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  const client = await receptionPool.connect();
+
+  try {
+    const interventionRes = await client.query(
+      `
+      SELECT i.*,
+             f.name AS floor_name,
+             r.name AS room_name,
+             c.id AS chantier_id,
+             CASE
+               WHEN c.nom IS NOT NULL AND c.nom <> '' THEN c.nom
+               ELSE c.name
+             END AS chantier_name
+      FROM interventions i
+      LEFT JOIN floors f ON i.floor_id = f.id
+      LEFT JOIN rooms r ON i.room_id = r.id
+      LEFT JOIN chantiers c ON f.chantier_id = c.id
+      WHERE i.id = $1
+      `,
+      [id]
+    );
+
+    if (!interventionRes.rows.length) {
+      return res.status(404).send("Intervention introuvable");
+    }
+    const intervention = interventionRes.rows[0];
+
+    // on charge les étages / pièces du chantier
+    const floors = (
+      await client.query(
+        `SELECT id, name FROM floors WHERE chantier_id = $1 ORDER BY name`,
+        [intervention.chantier_id]
+      )
+    ).rows;
+
+    const rooms = (
+      await client.query(
+        `
+        SELECT r.id, r.name, r.floor_id, f.name AS floor_name
+        FROM rooms r
+        JOIN floors f ON r.floor_id = f.id
+        WHERE f.chantier_id = $1
+        ORDER BY f.name, r.name
+        `,
+        [intervention.chantier_id]
+      )
+    ).rows;
+
+    // catalogue LOT / Tâche du chantier
+    const catalogueLots = (
+      await client.query(
+        `
+        SELECT DISTINCT lot
+        FROM chantier_lot_tasks
+        WHERE chantier_id = $1
+        ORDER BY lot
+        `,
+        [intervention.chantier_id]
+      )
+    ).rows;
+
+    const lotTasks = (
+      await client.query(
+        `
+        SELECT lot, task
+        FROM chantier_lot_tasks
+        WHERE chantier_id = $1
+        ORDER BY lot, task
+        `,
+        [intervention.chantier_id]
+      )
+    ).rows;
+
+    res.render('intervention_edit', {
+      chantier: {
+        id: intervention.chantier_id,
+        display_name: intervention.chantier_name,
+      },
+      intervention,
+      floors,
+      rooms,
+      catalogueLots,
+      lotTasks,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Erreur lors du chargement de l'intervention.");
+  } finally {
+    client.release();
+  }
+});
+
+// Traitement du formulaire d'édition
+app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  const { floor_id, room_id, lot, task } = req.body;
+  const actor = req.session.user;
+
+  if (!lot || !task) {
+    return res.status(400).send("Lot et tâche sont obligatoires.");
+  }
+
+  const client = await receptionPool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const currentRes = await client.query(
+      `
+      SELECT i.*, f.chantier_id
+      FROM interventions i
+      LEFT JOIN floors f ON i.floor_id = f.id
+      WHERE i.id = $1
+      FOR UPDATE
+      `,
+      [id]
+    );
+
+    if (!currentRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).send("Intervention introuvable");
+    }
+
+    const current = currentRes.rows[0];
+
+    // Mise à jour de l'intervention
+    await client.query(
+      `
+      UPDATE interventions
+      SET floor_id = $1,
+          room_id = $2,
+          lot = $3,
+          task = $4
+      WHERE id = $5
+      `,
+      [
+        floor_id || null,
+        room_id || null,
+        lot,
+        task,
+        id,
+      ]
+    );
+
+    // On log dans l'historique
+    const actorName =
+      `${actor.prenom || ''} ${actor.nom || ''}`.trim() || actor.email;
+    const dateText = new Date().toISOString().slice(0, 10);
+
+    const changes = [];
+    if (current.lot !== lot) {
+      changes.push(`Lot : « ${current.lot || ''} » → « ${lot} »`);
+    }
+    if (current.task !== task) {
+      changes.push(`Tâche : « ${current.task || ''} » → « ${task} »`);
+    }
+    if (String(current.floor_id || '') !== String(floor_id || '')) {
+      changes.push('Étage modifié');
+    }
+    if (String(current.room_id || '') !== String(room_id || '')) {
+      changes.push('Pièce modifiée');
+    }
+
+    const note = changes.length
+      ? `Modification de la tâche : ${changes.join(' | ')}`
+      : 'Modification de la tâche (aucun changement visible)';
+
+    await client.query(
+      `
+      INSERT INTO intervention_history (
+        intervention_id, event_type,
+        old_status, new_status,
+        persons, date_event,
+        actor_email, actor_name,
+        note
+      )
+      VALUES ($1, 'edit',
+              $2, $3,
+              $4, $5,
+              $6, $7,
+              $8)
+      `,
+      [
+        id,
+        current.status,
+        current.status,
+        current.person,
+        dateText,
+        actor.email,
+        actorName,
+        note,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.redirect(`/chantiers/${current.chantier_id}/taches`);
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+    res.status(500).send("Erreur lors de la modification de l'intervention.");
+  } finally {
+    client.release();
+  }
 });
 
 // Création manuelle d'une intervention (avec choix multiple de pièces)
