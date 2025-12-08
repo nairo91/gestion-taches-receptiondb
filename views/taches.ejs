@@ -408,6 +408,50 @@
     });
   })();
 </script>
+<script>
+  (function () {
+    const DROPDOWNS = document.querySelectorAll('[data-multi-dropdown]');
+
+    DROPDOWNS.forEach(drop => {
+      const toggle = drop.querySelector('.multi-dropdown-toggle');
+      const panel  = drop.querySelector('.multi-dropdown-panel');
+      const checkboxes = panel.querySelectorAll('input[type="checkbox"]');
+
+      function updateLabel() {
+        const selected = Array.from(checkboxes)
+          .filter(c => c.checked)
+          .map(c => c.nextElementSibling.textContent.trim());
+
+        if (!selected.length) {
+          toggle.textContent = 'Sélectionner...';
+        } else if (selected.length === 1) {
+          toggle.textContent = selected[0];
+        } else {
+          toggle.textContent = selected.length + ' personnes sélectionnées';
+        }
+      }
+
+      toggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        drop.classList.toggle('open');
+      });
+
+      checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateLabel);
+      });
+
+      // fermeture en cliquant à l’extérieur
+      document.addEventListener('click', (e) => {
+        if (!drop.contains(e.target)) {
+          drop.classList.remove('open');
+        }
+      });
+
+      // init au chargement (au cas où des cases seraient pré-cochées un jour)
+      updateLabel();
+    });
+  })();
+</script>
 
 </body>
 </html>
