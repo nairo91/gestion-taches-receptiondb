@@ -11,26 +11,45 @@
     </header>
 
     <main class="page-shell">
-      <section class="card">
-      <p>
-  Chantier : <strong><%= intervention.chantier_name %></strong><br/>
-  Étape : <%= intervention.floor_name || intervention.old_floor_name || '-' %> - 
-  Pièce : <%= intervention.room_name || intervention.old_room_name || '-' %><br/>
-  Lot : <%= intervention.lot %><br/>
-  Tâche : <%= intervention.task %><br/>
-  Créée le :
-  <% if (intervention.created_at) { %>
-    <%= intervention.created_at.toISOString().slice(0,10).split('-').reverse().join('/') %>
-  <% } else { %>
-    -
+    <section class="card">
+  <p>
+    Chantier : <strong><%= intervention.chantier_name %></strong><br/>
+    Étape : <%= intervention.floor_name || intervention.old_floor_name || '-' %> - 
+    Pièce : <%= intervention.room_name || intervention.old_room_name || '-' %><br/>
+    Lot : <%= intervention.lot %><br/>
+    Tâche : <%= intervention.task %><br/>
+    Créée le :
+    <% if (intervention.created_at) { %>
+      <%= intervention.created_at.toISOString().slice(0,10).split('-').reverse().join('/') %>
+    <% } else { %>
+      -
+    <% } %>
+  </p>
+
+  <% if (history && history.length) { 
+       const last = history[history.length - 1];
+       const lastDate = last.created_at
+         ? new Date(last.created_at).toLocaleDateString('fr-FR')
+         : '';
+       const lastType =
+         last.event_type === 'creation' ? 'Création' :
+         last.event_type === 'status_change' ? 'Changement de statut' :
+         last.event_type === 'edit' ? 'Modification' :
+         last.event_type;
+  %>
+    <div class="last-action-banner">
+      Dernière action :
+      <strong><%= lastType %></strong>
+      le <strong><%= lastDate %></strong>
+      par <strong><%= last.actor_name || last.actor_email || '—' %></strong>
+    </div>
   <% } %>
-</p>
 
+  <a href="/chantiers/<%= intervention.chantier_id %>/taches" class="btn btn-secondary">
+    ← Retour aux tâches
+  </a>
+</section>
 
-        <a href="/chantiers/<%= intervention.chantier_id %>/taches" class="btn btn-secondary">
-          ← Retour aux tâches
-        </a>
-      </section>
 
       <section class="card">
         <h2>Historique des actions</h2>
