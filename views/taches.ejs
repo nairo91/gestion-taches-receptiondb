@@ -114,15 +114,24 @@
                   <% if (i.status !== 'terminé') { %>
                     <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
                       <input type="hidden" name="new_status" value="en cours" />
-                      <label>Qui ?
-                        <select name="persons" multiple size="3">
-                          <% usersList.forEach(u => { %>
-                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
-                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
-                            </option>
-                          <% }) %>
-                        </select>
-                      </label>
+                  <label>Qui ?
+                    <div class="multi-dropdown" data-multi-dropdown>
+                      <button type="button" class="multi-dropdown-toggle">
+                        Sélectionner...
+                      </button>
+                      <div class="multi-dropdown-panel">
+                        <% usersList.forEach(u => { 
+                             const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+                        %>
+                          <label class="multi-dropdown-option">
+                            <input type="checkbox" name="persons" value="<%= label %>">
+                            <span><%= label %></span>
+                          </label>
+                        <% }) %>
+                      </div>
+                    </div>
+                  </label>
+
                       <label>Depuis quand ?
                         <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
                       </label>
@@ -134,14 +143,23 @@
                     <form method="post" action="/interventions/<%= i.id %>/status" class="status-form">
                       <input type="hidden" name="new_status" value="terminé" />
                       <label>Qui ?
-                        <select name="persons" multiple size="3">
-                          <% usersList.forEach(u => { %>
-                            <option value="<%= (u.prenom + ' ' + u.nom).trim() || u.email %>">
-                              <%= (u.prenom + ' ' + u.nom).trim() || u.email %>
-                            </option>
-                          <% }) %>
-                        </select>
-                      </label>
+                          <div class="multi-dropdown" data-multi-dropdown>
+                            <button type="button" class="multi-dropdown-toggle">
+                              Sélectionner...
+                            </button>
+                            <div class="multi-dropdown-panel">
+                              <% usersList.forEach(u => { 
+                                   const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+                              %>
+                                <label class="multi-dropdown-option">
+                                  <input type="checkbox" name="persons" value="<%= label %>">
+                                  <span><%= label %></span>
+                                </label>
+                              <% }) %>
+                            </div>
+                          </div>
+                        </label>
+
                       <label>Quand ?
                         <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
                       </label>
