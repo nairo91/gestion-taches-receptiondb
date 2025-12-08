@@ -903,7 +903,7 @@ app.post('/interventions/:id/status', async (req, res) => {
 });
 
 // Historique complet d'une intervention
-app.get('/interventions/:id/history',requireAdmin, async (req, res) => {
+app.get('/interventions/:id/history', requireAdmin, async (req, res) => {
   const id = req.params.id;
 
   // récupérer l'intervention + chantier
@@ -942,11 +942,16 @@ app.get('/interventions/:id/history',requireAdmin, async (req, res) => {
     [id]
   );
 
+  const history = historyRes.rows;
+  const lastAction = history.length ? history[history.length - 1] : null;
+
   res.render('intervention_history', {
     intervention,
-    history: historyRes.rows,
+    history,
+    lastAction,    // 👈 on passe l'info à la vue
   });
 });
+
 
 
 // --- ÉDITER UNE INTERVENTION ---
