@@ -1103,21 +1103,37 @@ app.post('/interventions/:id/edit', requireAdmin, async (req, res) => {
         ? date.trim()
         : new Date().toISOString().slice(0, 10));
 
-    // --- Construire la note de correction Qui/Quand ---
-    let correctionParts = [];
-    if (personsArray.length) {
-      correctionParts.push(`Qui = ${newPerson}`);
-    }
-    if (date) {
-      correctionParts.push(`Quand = ${dateText}`);
-    }
-    const correctionText = correctionParts.length
-      ? `Correction Qui/Quand le ${dateText} par ${actorName} (${correctionParts.join(' | ')})`
-      : '';
+   // On part de l'action actuelle
+  let updatedActionBase = current.action || '';
 
-    const newAction = correctionText
-      ? ((current.action && current.action.length ? current.action + '\n' : '') + correctionText)
-      : current.action;
+  // Si on a une date et que le statut est "en cours",
+  // on remplace la date dans la phrase "En cours depuis le ..."
+  if (date && date.trim().length > 0 && current.status === 'en cours') {
+    const regex = /En cours depuis le \d{4}-\d{2}-\d{2}/;
+    if (regex.test(updatedActionBase)) {
+      updatedActionBase = updatedActionBase.replace(
+        regex,
+        `En cours depuis le ${dateText}`
+      );
+    }
+  }
+
+  // --- Construire la note de correction Qui/Quand ---
+  let correctionParts = [];
+  if (personsArray.length) {
+    correctionParts.push(`Qui = ${newPerson}`);
+  }
+  if (date) {
+    correctionParts.push(`Quand = ${dateText}`);
+  }
+  const correctionText = correctionParts.length
+    ? `Correction Qui/Quand le ${dateText} par ${actorName} (${correctionParts.join(' | ')})`
+    : '';
+
+  const newAction = correctionText
+    ? ((updatedActionBase && updatedActionBase.length ? updatedActionBase + '\n' : '') + correctionText)
+    : updatedActionBase;
+
 
     // --- Modifs sur lot / tâche / étage / pièce ---
     await client.query(
