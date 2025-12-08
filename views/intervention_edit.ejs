@@ -38,6 +38,26 @@
 
         <form method="post" action="/interventions/<%= intervention.id %>/edit" class="edit-task-form">
           <div class="form-grid">
+          <% const selectedPersons = (intervention.person || '').split(',').map(p => p.trim()).filter(Boolean); %>
+          <label>Qui ?
+  <select name="persons" multiple size="4">
+    <% usersList.forEach(u => {
+         const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+    %>
+      <option value="<%= label %>" <%= selectedPersons.includes(label) ? 'selected' : '' %>>
+        <%= label %>
+      </option>
+    <% }) %>
+  </select>
+  <span class="help">Laisser vide pour ne pas modifier le « Qui ».</span>
+</label>
+
+<label>Quand ?
+  <input type="date" name="date" value="<%= new Date().toISOString().slice(0,10) %>" />
+  <span class="help">Utilisé pour la note de correction.</span>
+</label>
+
+
             <label>Étage
               <select name="floor_id" required>
                 <% floors.forEach(f => { %>
