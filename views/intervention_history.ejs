@@ -12,13 +12,20 @@
 
     <main class="page-shell">
       <section class="card">
-        <p>
-          <strong>Chantier :</strong> <%= intervention.chantier_name %><br />
-          <strong>Étage :</strong> <%= intervention.floor_name || intervention.old_floor_name || '-' %> - 
-          <strong>Pièce :</strong> <%= intervention.room_name || intervention.old_room_name || '-' %><br />
-          <strong>Lot :</strong> <%= intervention.lot || '-' %><br />
-          <strong>Tâche :</strong> <%= intervention.task || '-' %>
-        </p>
+      <p>
+  Chantier : <strong><%= intervention.chantier_name %></strong><br/>
+  Étape : <%= intervention.floor_name || intervention.old_floor_name || '-' %> - 
+  Pièce : <%= intervention.room_name || intervention.old_room_name || '-' %><br/>
+  Lot : <%= intervention.lot %><br/>
+  Tâche : <%= intervention.task %><br/>
+  Créée le :
+  <% if (intervention.created_at) { %>
+    <%= intervention.created_at.toISOString().slice(0,10).split('-').reverse().join('/') %>
+  <% } else { %>
+    -
+  <% } %>
+</p>
+
 
         <a href="/chantiers/<%= intervention.chantier_id %>/taches" class="btn btn-secondary">
           ← Retour aux tâches
