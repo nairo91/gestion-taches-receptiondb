@@ -726,16 +726,28 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     [chantierId]
   );
 
-  // 🔹 NOUVEAU : lots du catalogue
+  // 🔹 Catalogue LOT/Tâche POUR CE CHANTIER
   const catalogueLotsResult = await receptionPool.query(
-    `SELECT DISTINCT lot FROM lot_tasks ORDER BY lot`
+    `
+    SELECT DISTINCT lot
+    FROM lot_tasks_chantier
+    WHERE chantier_id = $1
+    ORDER BY lot
+    `,
+    [chantierId]
   );
   const catalogueLots = catalogueLotsResult.rows;
-    const lotTasksResult = await receptionPool.query(
-    `SELECT lot, task FROM lot_tasks ORDER BY lot, task`
+
+  const lotTasksResult = await receptionPool.query(
+    `
+    SELECT lot, task
+    FROM lot_tasks_chantier
+    WHERE chantier_id = $1
+    ORDER BY lot, task
+    `,
+    [chantierId]
   );
   const lotTasks = lotTasksResult.rows;
-
 
   res.render('taches', {
     chantier,
@@ -746,9 +758,10 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     lotsOptions: lotsResult.rows,
     tasksOptions: tasksResult.rows,
     catalogueLots,
-     lotTasks,   // ← envoyé à la vue
+    lotTasks,
   });
 });
+
 
 
 // Changer le statut d'une intervention (A FAIRE / EN COURS / TERMINÉ)
@@ -1015,6 +1028,7 @@ app.get('/import', async (req, res) => {
 });
 
 // Traitement de l'import Excel : alimente le catalogue LOT / Tâche
+// Traitement de l'import Excel : alimente le catalogue LOT / Tâche DU CHANTIER CHOISI
 app.post('/import', upload.single('fichier'), async (req, res) => {
   const chantierId = req.body.chantier_id;
   const filePath = req.file ? req.file.path : null;
@@ -1055,17 +1069,13 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
   const sheet = workbook.worksheets[0];
 
-  // On va lire : 
-  // Colonne A = LOT (peut être vide -> on reprend le dernier LOT non vide)
-  // Colonne B = Tâche
+  // A = LOT (peut être vide -> on reprend le dernier non vide)
+  // B = Tâche
   let currentLot = null;
-
-  // pour éviter les doublons (lot, task)
-  const pairs = new Set();
+  const pairs = new Set(); // (lot, task) uniques
 
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    // Ligne 1 = en-tête "LOT | Travaux chambre ..."
-    if (rowNumber === 1) return;
+    if (rowNumber === 1) return; // en-tête
 
     const lotCell = row.getCell(1).value;
     const taskCell = row.getCell(2).value;
@@ -1073,16 +1083,11 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     const lot = lotCell ? String(lotCell).trim() : '';
     const task = taskCell ? String(taskCell).trim() : '';
 
-    // si la cellule LOT est remplie on met à jour le "currentLot"
-    if (lot) {
-      currentLot = lot;
-    }
+    if (lot) currentLot = lot;
 
-    // si pas de lot courant ou pas de tâche -> on ignore
     if (!currentLot || !task) return;
 
-    // on peut éventuellement filtrer certaines lignes "techniques"
-    // par ex. si tu as une ligne de titre spéciale dans la colonne B :
+    // si ta 1ère ligne de la colonne B est un titre type "Travaux chambre ..."
     if (/^travaux chambre/i.test(task)) return;
 
     const key = `${currentLot}|||${task}`;
@@ -1095,18 +1100,22 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    // 🔁 On écrase le catalogue de ce chantier uniquement
+    await client.query(
+      'DELETE FROM lot_tasks_chantier WHERE chantier_id = $1',
+      [chantierId]
+    );
+
     for (const key of pairs) {
       const [lot, task] = key.split('|||');
 
-      // si tu as mis une contrainte UNIQUE(lot, task) sur lot_tasks,
-      // tu peux faire un ON CONFLICT DO NOTHING.
       await client.query(
         `
-        INSERT INTO lot_tasks (lot, task)
-        VALUES ($1, $2)
-        ON CONFLICT DO NOTHING
+        INSERT INTO lot_tasks_chantier (chantier_id, lot, task)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (chantier_id, lot, task) DO NOTHING
         `,
-        [lot, task]
+        [chantierId, lot, task]
       );
       inserted++;
     }
@@ -1125,16 +1134,18 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     fs.unlink(filePath, () => {});
   }
 
-  const chantierLabel = chantiers.find(c => String(c.id) === String(chantierId))?.display_name || '';
-  const chantierInfo = chantierLabel ? ` (à partir du fichier du chantier « ${chantierLabel} »)` : '';
+  const chantierLabel =
+    chantiers.find(c => String(c.id) === String(chantierId))?.display_name || '';
+  const chantierInfo = chantierLabel
+    ? ` pour le chantier « ${chantierLabel} »`
+    : '';
 
   return res.render('import', {
     chantiers,
-    message: `Import terminé : ${inserted} couples LOT / Tâche ajoutés au catalogue${chantierInfo}.`,
+    message: `Import terminé : ${inserted} couples LOT / Tâche enregistrés${chantierInfo}.`,
     error: null,
   });
 });
-
 
 
 
