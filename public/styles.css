@@ -504,3 +504,13 @@ main a:not(.btn):hover {
   font-weight: 600;
 }
 
+.last-action-banner {
+  margin-top: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #f3e8ff;      /* violet très clair */
+  color: #4b0082;           /* texte violet foncé */
+  font-size: 0.9rem;
+  display: inline-block;
+}
+
