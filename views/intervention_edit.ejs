@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Modifier la tâche - <%= chantier.display_name %></title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <h1>Modifier la tâche</h1>
+      <div class="user-info">
+        Connecté en tant que
+        <strong><%= currentUser.prenom %> <%= currentUser.nom %></strong>
+        (<%= currentUser.email %>)
+        <a href="/logout">Déconnexion</a>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="card">
+        <a href="/chantiers/<%= chantier.id %>/taches" class="btn btn-secondary">
+          ← Retour aux tâches du chantier
+        </a>
+
+        <h2>Détails actuels</h2>
+        <p>
+          <strong>Chantier :</strong> <%= chantier.display_name %><br/>
+          <strong>Étage :</strong> <%= intervention.floor_name || intervention.old_floor_name || '-' %><br/>
+          <strong>Pièce :</strong> <%= intervention.room_name || intervention.old_room_name || '-' %><br/>
+          <strong>Lot :</strong> <%= intervention.lot || '-' %><br/>
+          <strong>Tâche :</strong> <%= intervention.task || '-' %><br/>
+          <strong>Statut :</strong> <%= intervention.status %>
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Modifier la tâche</h2>
+
+        <form method="post" action="/interventions/<%= intervention.id %>/edit" class="edit-task-form">
+          <div class="form-grid">
+            <label>Étage
+              <select name="floor_id" required>
+                <% floors.forEach(f => { %>
+                  <option value="<%= f.id %>" <%= String(f.id) === String(intervention.floor_id) ? 'selected' : '' %>>
+                    <%= f.name %>
+                  </option>
+                <% }) %>
+              </select>
+            </label>
+
+            <label>Pièce
+              <select name="room_id" required>
+                <% rooms.forEach(r => { %>
+                  <option value="<%= r.id %>" 
+                          data-floor-id="<%= r.floor_id %>"
+                          <%= String(r.id) === String(intervention.room_id) ? 'selected' : '' %>>
+                    <%= r.floor_name %> - <%= r.name %>
+                  </option>
+                <% }) %>
+              </select>
+            </label>
+
+            <label>Lot
+              <select name="lot" required>
+                <option value="">-- Choisir un LOT --</option>
+                <% catalogueLots.forEach(l => { %>
+                  <option value="<%= l.lot %>" <%= intervention.lot === l.lot ? 'selected' : '' %>>
+                    <%= l.lot %>
+                  </option>
+                <% }) %>
+              </select>
+            </label>
+
+            <label>Tâche
+              <select name="task" required>
+                <option value="">-- Choisir un LOT d'abord --</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn">Enregistrer les modifications</button>
+            <a href="/chantiers/<%= chantier.id %>/taches" class="btn btn-secondary">Annuler</a>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      // données LOT / Tâche pour ce chantier
+      const LOT_TASKS = <%- JSON.stringify(lotTasks || []) %>;
+    </script>
+
+    <script>
+      (function () {
+        // --- Gestion Lot -> Tâches (comme sur la création) ---
+        const lotTasks = Array.isArray(LOT_TASKS) ? LOT_TASKS : [];
+        const tasksByLot = {};
+
+        lotTasks.forEach(row => {
+          if (!row.lot || !row.task) return;
+          if (!tasksByLot[row.lot]) tasksByLot[row.lot] = [];
+          if (!tasksByLot[row.lot].includes(row.task)) {
+            tasksByLot[row.lot].push(row.task);
+          }
+        });
+
+        const form = document.querySelector('form.edit-task-form');
+        if (!form) return;
+
+        const lotSelect  = form.querySelector('select[name="lot"]');
+        const taskSelect = form.querySelector('select[name="task"]');
+
+        function refreshTasks() {
+          const lot = lotSelect.value;
+          const currentTask = "<%= intervention.task || '' %>";
+
+          while (taskSelect.firstChild) {
+            taskSelect.removeChild(taskSelect.firstChild);
+          }
+
+          const defaultOpt = document.createElement('option');
+          defaultOpt.value = '';
+          if (!lot) {
+            defaultOpt.textContent = "-- Choisir un LOT d'abord --";
+            taskSelect.appendChild(defaultOpt);
+            return;
+          }
+
+          if (!tasksByLot[lot] || !tasksByLot[lot].length) {
+            defaultOpt.textContent = "Aucune tâche définie pour ce LOT";
+            taskSelect.appendChild(defaultOpt);
+            return;
+          }
+
+          defaultOpt.textContent = "-- Choisir une tâche --";
+          taskSelect.appendChild(defaultOpt);
+
+          tasksByLot[lot].forEach(task => {
+            const opt = document.createElement('option');
+            opt.value = task;
+            opt.textContent = task;
+            if (task === currentTask) {
+              opt.selected = true;
+            }
+            taskSelect.appendChild(opt);
+          });
+        }
+
+        lotSelect.addEventListener('change', refreshTasks);
+        // init
+        refreshTasks();
+      })();
+    </script>
+
+    <script>
+      (function () {
+        // --- Filtrage des pièces en fonction de l'étage ---
+        const form = document.querySelector('form.edit-task-form');
+        if (!form) return;
+
+        const floorSelect = form.querySelector('select[name="floor_id"]');
+        const roomSelect  = form.querySelector('select[name="room_id"]');
+
+        function refreshRooms() {
+          const floorId = floorSelect.value;
+          const currentValue = roomSelect.value;
+
+          const options = Array.from(roomSelect.querySelectorAll('option'));
+
+          options.forEach(opt => {
+            const optFloorId = opt.getAttribute('data-floor-id');
+            if (!floorId || String(optFloorId) === String(floorId)) {
+              opt.style.display = '';
+            } else {
+              opt.style.display = 'none';
+              if (opt.selected) opt.selected = false;
+            }
+          });
+
+          // si plus aucune sélection visible, on en choisit une
+          const visibleOptions = options.filter(
+            o => o.style.display !== 'none'
+          );
+          if (
+            !roomSelect.value ||
+            roomSelect.selectedOptions.length === 0 ||
+            roomSelect.selectedOptions[0].style.display === 'none'
+          ) {
+            if (visibleOptions.length) {
+              visibleOptions[0].selected = true;
+            }
+          }
+        }
+
+        floorSelect.addEventListener('change', refreshRooms);
+        // init
+        refreshRooms();
+      })();
+    </script>
+  </body>
+</html>
