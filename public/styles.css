@@ -474,4 +474,33 @@ main a:not(.btn):hover {
 .multi-dropdown-option input[type="checkbox"] {
   margin: 0;
 }
+/* Historique : mise en évidence des modifications */
+.history-row-edit {
+  background-color: #f5f7ff;
+}
+
+.history-detail-cell {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.history-changes {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.history-changes li + li {
+  margin-top: 4px;
+}
+
+.change-before {
+  color: #c0392b;       /* rouge pour AVANT */
+  font-weight: 600;
+}
+
+.change-after {
+  color: #27ae60;       /* vert pour APRES */
+  font-weight: 600;
+}
 
