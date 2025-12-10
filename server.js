@@ -926,6 +926,141 @@ app.post('/interventions/:id/status', async (req, res) => {
   res.redirect('back');
 });
 
+// --- Changement de statut en masse (plusieurs interventions) ---
+app.post('/interventions/bulk-status', async (req, res) => {
+  const { new_status, date, persons } = req.body;
+  const actor = req.session.user;
+
+  const allowed = ['a faire', 'en cours', 'terminé'];
+  if (!allowed.includes(new_status)) {
+    return res.status(400).send('Statut invalide');
+  }
+
+  // IDs des interventions sélectionnées
+  let ids = req.body.ids || [];
+  if (!Array.isArray(ids)) {
+    ids = [ids];
+  }
+  ids = ids
+    .map(id => String(id).trim())
+    .filter(id => id.length > 0);
+
+  if (!ids.length) {
+    // rien sélectionné, on revient simplement
+    return res.redirect('back');
+  }
+
+  // personnes communes
+  let personsArray = [];
+  if (Array.isArray(persons)) {
+    personsArray = persons.filter(p => p && p.trim().length > 0);
+  } else if (typeof persons === 'string' && persons.trim().length > 0) {
+    personsArray = [persons.trim()];
+  }
+
+  const actorName =
+    `${actor?.prenom || ''} ${actor?.nom || ''}`.trim() || actor?.email || '';
+
+  // si personne choisie -> on met l'utilisateur courant
+  if (!personsArray.length) {
+    if (actorName) {
+      personsArray = [actorName];
+    }
+  }
+
+  const personsText = personsArray.join(', ');
+  const dateText =
+    (date && date.trim().length > 0
+      ? date.trim()
+      : new Date().toISOString().slice(0, 10));
+
+  const client = await receptionPool.connect();
+  try {
+    await client.query('BEGIN');
+
+    for (const id of ids) {
+      // on verrouille l'intervention
+      const currentRes = await client.query(
+        'SELECT status, person, action FROM interventions WHERE id = $1 FOR UPDATE',
+        [id]
+      );
+      if (!currentRes.rows.length) {
+        continue;
+      }
+      const current = currentRes.rows[0];
+
+      // construction de l'event comme dans /interventions/:id/status
+      let eventText = '';
+      let newPerson = current.person; // par défaut on garde l'ancien "Qui ?"
+
+      if (new_status === 'a faire') {
+        eventText = `Réinitialisé le ${dateText} par ${actorName}`;
+      } else if (new_status === 'en cours') {
+        eventText = `En cours depuis le ${dateText} (par ${personsText})`;
+        newPerson = personsText; // ceux qui font la tâche
+      } else if (new_status === 'terminé' && (!actor || actor.role !== 'admin')) {
+        // validation par la personne connectée (non admin)
+        eventText = `Terminé le ${dateText} (validé par ${actorName})`;
+        // on garde newPerson = current.person
+      }
+
+      const newAction =
+        (current.action && current.action.length ? current.action + '\n' : '') +
+        eventText;
+
+      // mise à jour de l'intervention
+      await client.query(
+        `
+        UPDATE interventions
+        SET status = $1,
+            person = $2,
+            action = $3
+        WHERE id = $4
+        `,
+        [new_status, newPerson, newAction, id]
+      );
+
+      // écriture dans l'historique
+      await client.query(
+        `
+        INSERT INTO intervention_history (
+          intervention_id, event_type,
+          old_status, new_status,
+          persons, date_event,
+          actor_email, actor_name,
+          note
+        )
+        VALUES ($1, 'status_change',
+                $2, $3,
+                $4, $5,
+                $6, $7,
+                $8)
+        `,
+        [
+          id,
+          current.status,
+          new_status,
+          personsText,
+          dateText,
+          actor?.email || '',
+          actorName,
+          eventText,
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+    return res.status(500).send("Erreur lors du changement de statut en masse.");
+  } finally {
+    client.release();
+  }
+
+  res.redirect('back');
+});
+
 // Historique complet d'une intervention
 app.get('/interventions/:id/history', requireAdmin, async (req, res) => {
   const id = req.params.id;
