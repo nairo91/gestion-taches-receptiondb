@@ -169,6 +169,58 @@ body {
   gap: 8px;
 }
 
+/* Ligne principale + ligne d'actions */
+.task-row-actions td {
+  padding-top: 0.25rem;
+  padding-bottom: 0.75rem;
+  background: #f8f7ff;
+  border-top: none;
+}
+
+.task-row.done + .task-row-actions td {
+  background: #f2fff5;
+}
+
+/* Barre d'actions sous la ligne */
+.task-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.task-actions-main {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Regroupe les formulaires de statut sur une seule ligne */
+.task-actions-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.inline-status-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.inline-status-form label {
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* un peu plus compact pour les selects */
+.inline-status-form select,
+.inline-status-form input[type="date"] {
+  min-width: 160px;
+}
+
 .bulk-section {
   margin-top: 1.5rem;
   padding-top: 1rem;
