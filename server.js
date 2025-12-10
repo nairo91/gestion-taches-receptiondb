@@ -928,7 +928,7 @@ app.post('/interventions/:id/status', async (req, res) => {
 
 // --- Changement de statut en masse (plusieurs interventions) ---
 app.post('/interventions/bulk-status', async (req, res) => {
-  const { intervention_ids, new_status, date, persons } = req.body;
+  const { ids, new_status, date, persons } = req.body;
   const actor = req.session.user;
 
   const allowed = ['a faire', 'en cours', 'terminé'];
@@ -936,29 +936,23 @@ app.post('/interventions/bulk-status', async (req, res) => {
     return res.status(400).send('Statut invalide');
   }
 
-  let ids = [];
-
-  if (typeof intervention_ids === 'string') {
-    ids = intervention_ids
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
+  // --- ids en tableau propre ---
+  let idsArray = [];
+  if (Array.isArray(ids)) {
+    idsArray = ids;
+  } else if (typeof ids === 'string') {
+    idsArray = [ids];
   }
 
-  let idsFromForm = req.body.ids || [];
-  if (!Array.isArray(idsFromForm)) {
-    idsFromForm = idsFromForm ? [idsFromForm] : [];
-  }
-  idsFromForm = idsFromForm
-    .map((id) => String(id).trim())
-    .filter((id) => id.length > 0);
+  idsArray = idsArray
+    .map((id) => parseInt(id, 10))
+    .filter((id) => Number.isInteger(id));
 
-  ids = Array.from(new Set([...ids, ...idsFromForm]));
-
-  if (!ids.length) {
-    return res.redirect('back');
+  if (!idsArray.length) {
+    return res.status(400).send('Aucune tâche sélectionnée.');
   }
 
+  // --- personnes choisies dans le formulaire ---
   let personsArray = [];
   if (Array.isArray(persons)) {
     personsArray = persons.filter((p) => p && p.trim().length > 0);
@@ -966,50 +960,91 @@ app.post('/interventions/bulk-status', async (req, res) => {
     personsArray = [persons.trim()];
   }
 
+  const hasCustomPersons = personsArray.length > 0;
+  const personsText = hasCustomPersons ? personsArray.join(', ') : null;
+
   const actorName =
-    `${actor?.prenom || ''} ${actor?.nom || ''}`.trim() || actor?.email || '';
+    `${actor.prenom || ''} ${actor.nom || ''}`.trim() || actor.email;
 
-  if (!personsArray.length && actorName) {
-    personsArray = [actorName];
-  }
-
-  const personsText = personsArray.join(', ');
   const dateText =
-    (date && date.trim().length > 0
+    date && date.trim().length > 0
       ? date.trim()
-      : new Date().toISOString().slice(0, 10));
+      : new Date().toISOString().slice(0, 10);
 
   const client = await receptionPool.connect();
+
   try {
     await client.query('BEGIN');
 
-    for (const id of ids) {
-      const currentRes = await client.query(
-        'SELECT status, person, action FROM interventions WHERE id = $1 FOR UPDATE',
-        [id]
-      );
-      if (!currentRes.rows.length) {
-        continue;
-      }
-      const current = currentRes.rows[0];
+    // On récupère toutes les interventions sélectionnées, avec le chantier
+    const placeholders = idsArray.map((_, idx) => `$${idx + 1}`).join(', ');
+    const currentRes = await client.query(
+      `
+      SELECT i.*, f.chantier_id
+      FROM interventions i
+      LEFT JOIN floors f ON i.floor_id = f.id
+      WHERE i.id IN (${placeholders})
+      FOR UPDATE
+      `,
+      idsArray
+    );
 
+    if (!currentRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).send('Aucune intervention trouvée.');
+    }
+
+    // On prend le chantier du premier pour la redirection à la fin
+    let chantierId = currentRes.rows[0].chantier_id || null;
+
+    for (const current of currentRes.rows) {
+      const id = current.id;
+
+      // --- NOUVELLE LOGIQUE :
+      // si aucune personne sélectionnée dans le formulaire,
+      // on garde le "person" actuel de la tâche
+      let newPerson = current.person || '';
+
+      if (hasCustomPersons) {
+        newPerson = personsText;
+      }
+
+      // Construction du texte d'action (affichage dans la liste & l'historique)
       let eventText = '';
-      let newPerson = current.person;
 
       if (new_status === 'a faire') {
+        // on remet à zéro, validé par l'acteur, mais on ne change pas "Qui ?"
         eventText = `Réinitialisé le ${dateText} par ${actorName}`;
       } else if (new_status === 'en cours') {
-        eventText = `En cours depuis le ${dateText} (par ${personsText})`;
-        newPerson = personsText;
-      } else if (new_status === 'terminé' && (!actor || actor.role !== 'admin')) {
-        eventText = `Terminé le ${dateText} (validé par ${actorName})`;
+        if (hasCustomPersons) {
+          // on précise qui fait la tâche seulement si l'utilisateur a choisi des personnes
+          eventText = `En cours depuis le ${dateText} (par ${newPerson})`;
+        } else {
+          // pas de changement de "Qui ?", on garde ceux déjà enregistrés
+          eventText = `En cours depuis le ${dateText}`;
+        }
+      } else if (new_status === 'terminé') {
+        // on garde la logique précédente : validation par l'utilisateur connecté,
+        // et on ne touche pas aux personnes qui ont fait la tâche,
+        // sauf si l'utilisateur a explicitement sélectionné un nouveau "Qui ?"
+        if (!actor || actor.role !== 'admin') {
+          // validation simple
+          eventText = `Terminé le ${dateText} (validé par ${actorName})`;
+        } else {
+          // admin : peut éventuellement changer "Qui ?" via la multi-sélection
+          if (hasCustomPersons) {
+            newPerson = personsText;
+          }
+          eventText = `Terminé le ${dateText} (validé par ${actorName})`;
+        }
       }
 
       const newAction =
-        (current.action && current.action.length ? current.action + '\n' : '') +
-        eventText;
+        (current.action && current.action.length
+          ? current.action + '\n'
+          : '') + eventText;
 
-
+      // Mise à jour de l'intervention
       await client.query(
         `
         UPDATE interventions
@@ -1021,6 +1056,7 @@ app.post('/interventions/bulk-status', async (req, res) => {
         [new_status, newPerson, newAction, id]
       );
 
+      // Historique
       await client.query(
         `
         INSERT INTO intervention_history (
@@ -1040,25 +1076,35 @@ app.post('/interventions/bulk-status', async (req, res) => {
           id,
           current.status,
           new_status,
-          personsText,
+          hasCustomPersons ? newPerson : current.person || '',
           dateText,
-          actor?.email || '',
+          actor.email,
           actorName,
           eventText,
         ]
       );
+
+      // si on n'a pas encore de chantierId (cas très rare), on le récupère ici
+      if (!chantierId && current.chantier_id) {
+        chantierId = current.chantier_id;
+      }
     }
 
     await client.query('COMMIT');
+
+    if (chantierId) {
+      return res.redirect(`/chantiers/${chantierId}/taches`);
+    }
+    return res.redirect('back');
   } catch (err) {
     console.error(err);
     await client.query('ROLLBACK');
-    return res.status(500).send("Erreur lors du changement de statut en masse.");
+    return res
+      .status(500)
+      .send("Erreur lors du changement de statut en multi-sélection.");
   } finally {
     client.release();
   }
-
-  res.redirect('back');
 });
 
 // Historique complet d'une intervention
