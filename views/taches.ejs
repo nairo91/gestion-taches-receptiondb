@@ -102,159 +102,209 @@
             </tr>
           </thead>
           <tbody>
-            <% if (!interventions.length) { %>
-              <tr>
-                <td colspan="8" class="empty-state">Aucune intervention pour ce chantier (ou filtre trop restrictif).</td>
-              </tr>
-            <% } %>
-            <% interventions.forEach(i => { 
-                 const statusClass = i.status === 'terminé'
-                   ? 'status-termine'
-                   : i.status === 'en cours'
-                     ? 'status-en-cours'
-                     : 'status-a-faire';
-            %>
+  <% if (!interventions.length) { %>
+    <tr>
+      <td colspan="8" class="empty-state">
+        Aucune intervention pour ce chantier (ou filtre trop restrictif).
+      </td>
+    </tr>
+  <% } %>
 
-              <!-- Ligne principale : infos -->
-              <tr class="task-row <%= i.status === 'terminé' ? 'done' : '' %>">
-                <td>
-                  <input
-                    type="checkbox"
-                    class="bulk-checkbox task-select"
-                    name="ids"
-                    value="<%= i.id %>"
-                    form="bulk-status-form"
-                  />
-                </td>
+  <% interventions.forEach(i => { 
+       const statusClass =
+         i.status === 'terminé'
+           ? 'status-termine'
+           : i.status === 'en cours'
+           ? 'status-en-cours'
+           : 'status-a-faire';
+  %>
 
-                <td><%= i.floor_name || i.old_floor_name || '' %></td>
+    <!-- LIGNE RÉSUMÉ -->
+    <tr class="task-row <%= i.status === 'terminé' ? 'done' : '' %>" data-task-id="<%= i.id %>">
+      <!-- Sélection + chevron -->
+      <td class="task-cell-selection">
+        <input
+          type="checkbox"
+          class="bulk-checkbox task-select-checkbox"
+          name="ids"
+          value="<%= i.id %>"
+          form="bulk-status-form"
+        />
+        <button
+          type="button"
+          class="toggle-actions-btn"
+          data-task-id="<%= i.id %>"
+          aria-label="Afficher / masquer les actions pour cette tâche"
+        >
+          ▾
+        </button>
+      </td>
 
-                <td><%= i.room_name || i.old_room_name || '' %></td>
+      <td><%= i.floor_name || i.old_floor_name %></td>
+      <td><%= i.room_name || i.old_room_name %></td>
+      <td><%= i.lot %></td>
+      <td><%= i.task %></td>
+      <td>
+        <span class="status-badge <%= statusClass %>"><%= i.status %></span>
+      </td>
+      <td>
+        <strong><%= i.person || '' %></strong><br />
+        <small class="action-text"><%= (i.action || '').split('\n').slice(-1)[0] || '' %></small>
+      </td>
+      <td>
+        <%= i.created_at ? i.created_at.toISOString().slice(0,10) : '' %>
+      </td>
+    </tr>
 
-                <td><%= i.lot %></td>
+    <!-- LIGNE ACTIONS (PLIÉE / DÉPLIÉE) -->
+    <tr
+      class="task-row-actions"
+      data-task-id="<%= i.id %>"
+    >
+      <td colspan="8">
+        <div class="task-actions-panel">
+          <!-- Boutons Info / Modifier -->
+          <div class="task-actions-header">
+            <a
+              href="/interventions/<%= i.id %>/history"
+              class="btn btn-small btn-secondary"
+              target="_blank"
+            >
+              Info
+            </a>
 
-                <td><%= i.task %></td>
+            <a
+              href="/interventions/<%= i.id %>/edit"
+              class="btn btn-small btn-secondary"
+            >
+              Modifier
+            </a>
+          </div>
 
-                <td>
-                  <span class="status-badge <%= statusClass %>"><%= i.status %></span>
-                </td>
+          <!-- Formulaires de statut (En cours / Terminer / Remettre à faire) -->
+          <div class="task-actions-forms">
+            <% if (i.status !== 'terminé') { %>
+              <!-- EN COURS -->
+              <form
+                method="post"
+                action="/interventions/<%= i.id %>/status"
+                class="status-form"
+              >
+                <input type="hidden" name="new_status" value="en cours" />
 
-                <td>
-                  <strong><%= i.person || '' %></strong><br/>
-                  <small class="action-text"><%= (i.action || '').split('\n').slice(-1)[0] || '' %></small>
-                </td>
-
-                <td>
-                  <%= i.created_at
-                        ? i.created_at.toISOString().slice(0,10)
-                        : '' %>
-                </td>
-              </tr>
-
-              <!-- Ligne d'actions sous la tâche -->
-              <tr class="task-row-actions">
-                <td colspan="8">
-                  <div class="task-actions-bar">
-                    <!-- Boutons Info / Modifier -->
-                    <div class="task-actions-main">
-                      <a href="/interventions/<%= i.id %>/history"
-                         class="btn btn-small btn-secondary"
-                         target="_blank">
-                        Info
-                      </a>
-
-                      <a href="/interventions/<%= i.id %>/edit"
-                         class="btn btn-small">
-                        Modifier
-                      </a>
-                    </div>
-
-                    <!-- Formulaires de statut -->
-                    <div class="task-actions-status">
-
-                      <% if (i.status !== 'terminé') { %>
-                        <!-- Passer EN COURS -->
-                        <form method="post"
-                              action="/interventions/<%= i.id %>/status"
-                              class="status-form inline-status-form">
-                          <input type="hidden" name="new_status" value="en cours" />
-
-                          <label>Qui ?
-                            <select name="persons" multiple size="1">
-                              <% usersList.forEach(u => {
-                                   const label = (u.prenom + ' ' + u.nom).trim() || u.email;
-                              %>
-                                <option value="<%= label %>"><%= label %></option>
-                              <% }) %>
-                            </select>
-                          </label>
-
-                          <label>Depuis quand ?
-                            <input type="date"
-                                   name="date"
-                                   value="<%= new Date().toISOString().slice(0,10) %>" />
-                          </label>
-
-                          <button type="submit" class="btn btn-small">
-                            En cours
-                          </button>
-                        </form>
-                      <% } %>
-
-                      <% if (i.status !== 'terminé') { %>
-                        <!-- Passer TERMINÉ -->
-                        <form method="post"
-                              action="/interventions/<%= i.id %>/status"
-                              class="status-form inline-status-form">
-                          <input type="hidden" name="new_status" value="terminé" />
-
-                          <label>Qui ?
-                            <select name="persons" multiple size="1">
-                              <% usersList.forEach(u => {
-                                   const label = (u.prenom + ' ' + u.nom).trim() || u.email;
-                              %>
-                                <option value="<%= label %>"><%= label %></option>
-                              <% }) %>
-                            </select>
-                          </label>
-
-                          <label>Quand ?
-                            <input type="date"
-                                   name="date"
-                                   value="<%= new Date().toISOString().slice(0,10) %>" />
-                          </label>
-
-                          <button type="submit" class="btn btn-small">
-                            Terminer
-                          </button>
-                        </form>
-                      <% } %>
-
-                      <% if (i.status !== 'a faire') { %>
-                        <!-- Remettre A FAIRE -->
-                        <form method="post"
-                              action="/interventions/<%= i.id %>/status"
-                              class="status-form inline-status-form">
-                          <input type="hidden" name="new_status" value="a faire" />
-
-                          <label>Date
-                            <input type="date"
-                                   name="date"
-                                   value="<%= new Date().toISOString().slice(0,10) %>" />
-                          </label>
-
-                          <button type="submit"
-                                  class="btn btn-small btn-secondary">
-                            Remettre à faire
-                          </button>
-                        </form>
-                      <% } %>
+                <label>Qui ?
+                  <div class="multi-dropdown" data-multi-dropdown>
+                    <button
+                      type="button"
+                      class="multi-dropdown-toggle"
+                    >Sélectionner...</button>
+                    <div class="multi-dropdown-panel">
+                      <% usersList.forEach(u => {
+                           const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+                      %>
+                        <label class="multi-dropdown-option">
+                          <input
+                            type="checkbox"
+                            name="persons"
+                            value="<%= label %>"
+                          />
+                          <span><%= label %></span>
+                        </label>
+                      <% }) %>
                     </div>
                   </div>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
+                </label>
+
+                <label>Depuis quand ?
+                  <input
+                    type="date"
+                    name="date"
+                    value="<%= new Date().toISOString().slice(0,10) %>"
+                  />
+                </label>
+
+                <button type="submit" class="btn btn-small">
+                  En cours
+                </button>
+              </form>
+
+              <!-- TERMINER -->
+              <form
+                method="post"
+                action="/interventions/<%= i.id %>/status"
+                class="status-form"
+              >
+                <input type="hidden" name="new_status" value="terminé" />
+
+                <label>Qui ?
+                  <div class="multi-dropdown" data-multi-dropdown>
+                    <button
+                      type="button"
+                      class="multi-dropdown-toggle"
+                    >Sélectionner...</button>
+                    <div class="multi-dropdown-panel">
+                      <% usersList.forEach(u => {
+                           const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+                      %>
+                        <label class="multi-dropdown-option">
+                          <input
+                            type="checkbox"
+                            name="persons"
+                            value="<%= label %>"
+                          />
+                          <span><%= label %></span>
+                        </label>
+                      <% }) %>
+                    </div>
+                  </div>
+                </label>
+
+                <label>Quand ?
+                  <input
+                    type="date"
+                    name="date"
+                    value="<%= new Date().toISOString().slice(0,10) %>"
+                  />
+                </label>
+
+                <button type="submit" class="btn btn-small">
+                  Terminer
+                </button>
+              </form>
+            <% } %>
+
+            <% if (i.status !== 'a faire') { %>
+              <!-- REMETTRE À FAIRE -->
+              <form
+                method="post"
+                action="/interventions/<%= i.id %>/status"
+                class="status-form"
+              >
+                <input type="hidden" name="new_status" value="a faire" />
+
+                <label>Date
+                  <input
+                    type="date"
+                    name="date"
+                    value="<%= new Date().toISOString().slice(0,10) %>"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  class="btn btn-small btn-secondary"
+                >
+                  Remettre à faire
+                </button>
+              </form>
+            <% } %>
+          </div>
+        </div>
+      </td>
+    </tr>
+
+  <% }) %>
+</tbody>
         </table>
 
         <div class="bulk-section">
@@ -755,6 +805,26 @@
       idsInput.value = checkboxes.map(cb => cb.value).join(',');
     });
   })();
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const toggleButtons = document.querySelectorAll('.toggle-actions-btn');
+
+    toggleButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const taskId = btn.getAttribute('data-task-id');
+        const actionsRow = document.querySelector(
+          '.task-row-actions[data-task-id="' + taskId + '"]'
+        );
+
+        if (!actionsRow) return;
+
+        const isOpen = actionsRow.classList.toggle('is-open');
+        btn.classList.toggle('is-open', isOpen);
+      });
+    });
+  });
 </script>
 
 </body>
