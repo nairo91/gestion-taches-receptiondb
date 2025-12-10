@@ -169,6 +169,34 @@ body {
   gap: 8px;
 }
 
+.bulk-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.bulk-section-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.bulk-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.bulk-grid > label {
+  min-width: 220px;
+}
+
+.bulk-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

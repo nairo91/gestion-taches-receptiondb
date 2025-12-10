@@ -86,6 +86,10 @@
         <table class="table">
           <thead>
             <tr>
+              <th>
+                <!-- tout cocher / décocher -->
+                <input type="checkbox" id="bulk-check-all" />
+              </th>
               <th>Étage</th>
               <th>Pièce</th>
               <th>Lot</th>
@@ -99,11 +103,20 @@
           <tbody>
             <% if (!interventions.length) { %>
               <tr>
-                <td colspan="8" class="empty-state">Aucune intervention pour ce chantier (ou filtre trop restrictif).</td>
+                <td colspan="9" class="empty-state">Aucune intervention pour ce chantier (ou filtre trop restrictif).</td>
               </tr>
             <% } %>
             <% interventions.forEach(i => { const statusClass = i.status === 'terminé' ? 'status-termine' : i.status === 'en cours' ? 'status-en-cours' : 'status-a-faire'; %>
               <tr class="<%= i.status === 'terminé' ? 'done' : '' %>">
+                <td>
+                  <input
+                    type="checkbox"
+                    class="bulk-checkbox"
+                    name="ids"
+                    value="<%= i.id %>"
+                    form="bulk-status-form"
+                  />
+                </td>
                 <td><%= i.floor_name || i.old_floor_name %></td>
                 <td><%= i.room_name || i.old_room_name %></td>
                 <td><%= i.lot %></td>
@@ -197,6 +210,73 @@
             <% }) %>
           </tbody>
         </table>
+
+        <div class="bulk-section">
+          <form id="bulk-status-form"
+                class="bulk-status-form"
+                method="post"
+                action="/interventions/bulk-status">
+
+            <div class="bulk-section-title">
+              Actions groupées sur les tâches cochées
+            </div>
+
+            <div class="bulk-grid">
+              <!-- Qui ? (multi-sélection, même composant que pour les boutons de droite) -->
+              <label>Qui ?
+                <div class="multi-dropdown" data-multi-dropdown>
+                  <button type="button" class="multi-dropdown-toggle">
+                    Sélectionner...
+                  </button>
+                  <div class="multi-dropdown-panel">
+                    <% usersList.forEach(u => {
+                         const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+                    %>
+                      <label class="multi-dropdown-option">
+                        <input type="checkbox" name="persons" value="<%= label %>">
+                        <span><%= label %></span>
+                      </label>
+                    <% }) %>
+                  </div>
+                </div>
+              </label>
+
+              <!-- Date commune -->
+              <label>Date
+                <input type="date"
+                       name="date"
+                       value="<%= new Date().toISOString().slice(0,10) %>" />
+              </label>
+
+              <!-- Boutons d’action -->
+              <div class="bulk-buttons">
+                <button type="submit"
+                        class="btn btn-small"
+                        name="new_status"
+                        value="en cours"
+                        disabled>
+                  Mettre en cours
+                </button>
+
+                <button type="submit"
+                        class="btn btn-small"
+                        name="new_status"
+                        value="terminé"
+                        disabled>
+                  Terminer
+                </button>
+
+                <button type="submit"
+                        class="btn btn-small btn-secondary"
+                        name="new_status"
+                        value="a faire"
+                        disabled>
+                  Remettre à faire
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </section>
 
       <section class="card">
@@ -488,6 +568,46 @@
       // init
       updateLabel();
     });
+  })();
+</script>
+
+<script>
+  (function () {
+    const checkAll = document.getElementById('bulk-check-all');
+    const checkboxes = Array.from(document.querySelectorAll('.bulk-checkbox'));
+    const bulkButtons = Array.from(
+      document.querySelectorAll('#bulk-status-form button[type="submit"]')
+    );
+
+    function refreshButtons() {
+      const anyChecked = checkboxes.some(c => c.checked);
+      bulkButtons.forEach(btn => {
+        btn.disabled = !anyChecked;
+      });
+    }
+
+    if (checkAll) {
+      checkAll.addEventListener('change', () => {
+        const checked = checkAll.checked;
+        checkboxes.forEach(c => {
+          c.checked = checked;
+        });
+        refreshButtons();
+      });
+    }
+
+    checkboxes.forEach(c => {
+      c.addEventListener('change', () => {
+        const allChecked = checkboxes.length && checkboxes.every(cb => cb.checked);
+        if (checkAll) {
+          checkAll.checked = allChecked;
+        }
+        refreshButtons();
+      });
+    });
+
+    // init
+    refreshButtons();
   })();
 </script>
 
