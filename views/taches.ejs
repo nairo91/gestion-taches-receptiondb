@@ -52,6 +52,17 @@
             </select>
           </label>
 
+          <label>Tâche
+            <select name="task">
+              <option value="">Toutes</option>
+              <% tasksOptions.forEach(t => { %>
+                <option value="<%= t.task %>" <%= filters.task === t.task ? 'selected' : '' %>>
+                  <%= t.task %>
+                </option>
+              <% }) %>
+            </select>
+          </label>
+
           <label>Statut
             <select name="status">
               <option value="">Tous</option>
@@ -415,7 +426,7 @@
     });
 
     // ----- AUTO-SUBMIT DES FILTRES -----
-    ['floor', 'room', 'lot', 'status'].forEach(name => {
+    ['floor', 'room', 'lot', 'task', 'status'].forEach(name => {
       const el = filtersForm.querySelector(`[name="${name}"]`);
       if (el) {
         el.addEventListener('change', () => {
