@@ -644,6 +644,7 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     floor: req.query.floor || '',
     room: req.query.room || '',
     lot: req.query.lot || '',
+    task: req.query.task || '',
     status: req.query.status || '',
   };
 
@@ -709,6 +710,10 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     params.push(filters.lot);
     query += ` AND i.lot = $${params.length}`;
   }
+  if (filters.task) {
+    params.push(filters.task);
+    query += ` AND i.task = $${params.length}`;
+  }
   if (filters.status) {
     params.push(filters.status);
     query += ` AND i.status = $${params.length}`;
@@ -732,18 +737,37 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     [chantierId]
   );
 
-  const tasksResult = await receptionPool.query(
-    `
-    SELECT DISTINCT i.task
-    FROM interventions i
-    LEFT JOIN floors f ON i.floor_id = f.id
-    WHERE f.chantier_id = $1
-      AND i.task IS NOT NULL
-      AND i.task <> ''
-    ORDER BY i.task
-    `,
-    [chantierId]
-  );
+  let tasksResult;
+  if (filters.lot) {
+    // Tâches uniquement pour le lot filtré
+    tasksResult = await receptionPool.query(
+      `
+      SELECT DISTINCT i.task
+      FROM interventions i
+      LEFT JOIN floors f ON i.floor_id = f.id
+      WHERE f.chantier_id = $1
+        AND i.lot = $2
+        AND i.task IS NOT NULL
+        AND i.task <> ''
+      ORDER BY i.task
+      `,
+      [chantierId, filters.lot]
+    );
+  } else {
+    // Toutes les tâches du chantier
+    tasksResult = await receptionPool.query(
+      `
+      SELECT DISTINCT i.task
+      FROM interventions i
+      LEFT JOIN floors f ON i.floor_id = f.id
+      WHERE f.chantier_id = $1
+        AND i.task IS NOT NULL
+        AND i.task <> ''
+      ORDER BY i.task
+      `,
+      [chantierId]
+    );
+  }
 
   // 🔹 Nouveau : catalogue LOT / Tâche spécifique à ce chantier
   const catalogueLotsResult = await receptionPool.query(
