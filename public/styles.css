@@ -197,6 +197,51 @@ body {
   flex-wrap: wrap;
 }
 
+.bulk-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  background: #ffffff;
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.bulk-bar.hidden {
+  display: none;
+}
+
+.bulk-bar form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.bulk-count {
+  font-weight: 600;
+}
+
+.bulk-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+
+.bulk-field select {
+  min-width: 180px;
+}
+
+.bulk-field input[type="date"] {
+  min-width: 140px;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

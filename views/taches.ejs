@@ -87,8 +87,10 @@
           <thead>
             <tr>
               <th>
-                <!-- tout cocher / décocher -->
-                <input type="checkbox" id="bulk-check-all" />
+                Sélection
+                <div>
+                  <input type="checkbox" id="bulk-check-all" />
+                </div>
               </th>
               <th>Étage</th>
               <th>Pièce</th>
@@ -337,6 +339,57 @@
           <button type="submit" class="btn">Créer</button>
         </form>
       </section>
+
+      <!-- BARRE FLOTTANTE DE MODIFICATION MULTI-TÂCHES -->
+      <div id="bulk-bar" class="bulk-bar hidden">
+        <form id="bulk-form" method="post" action="/interventions/bulk-status">
+          <!-- les ids des tâches cochées, remplis en JS -->
+          <input type="hidden" name="intervention_ids" id="bulk-ids" />
+
+          <span id="bulk-count" class="bulk-count">Aucune tâche sélectionnée</span>
+
+          <!-- Qui ? (multi-sélection simple) -->
+          <label class="bulk-field">
+            Qui ?
+            <select name="persons" multiple size="3">
+              <% usersList.forEach(u => { 
+                   const label = (u.prenom + ' ' + u.nom).trim() || u.email;
+              %>
+                <option value="<%= label %>"><%= label %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <!-- Date -->
+          <label class="bulk-field">
+            Date
+            <input
+              type="date"
+              name="date"
+              value="<%= new Date().toISOString().slice(0,10) %>"
+            />
+          </label>
+
+          <!-- Boutons d’action -->
+          <button
+            type="submit"
+            name="new_status"
+            value="en cours"
+            class="btn btn-small"
+          >
+            En cours
+          </button>
+
+          <button
+            type="submit"
+            name="new_status"
+            value="terminé"
+            class="btn btn-small btn-primary"
+          >
+            Terminer
+          </button>
+        </form>
+      </div>
     </main>
 
 <script>
@@ -591,6 +644,7 @@
         const checked = checkAll.checked;
         checkboxes.forEach(c => {
           c.checked = checked;
+          c.dispatchEvent(new Event('change', { bubbles: true }));
         });
         refreshButtons();
       });
@@ -608,6 +662,54 @@
 
     // init
     refreshButtons();
+  })();
+</script>
+
+<script>
+  (function () {
+    const bar       = document.getElementById('bulk-bar');
+    const form      = document.getElementById('bulk-form');
+    const idsInput  = document.getElementById('bulk-ids');
+    const countSpan = document.getElementById('bulk-count');
+
+    if (!bar || !form || !idsInput || !countSpan) return;
+
+    function refreshBulkBar() {
+      const checkboxes = Array.from(
+        document.querySelectorAll('.bulk-checkbox:checked')
+      );
+      const count = checkboxes.length;
+
+      if (!count) {
+        bar.classList.add('hidden');
+        idsInput.value = '';
+        countSpan.textContent = 'Aucune tâche sélectionnée';
+        return;
+      }
+
+      bar.classList.remove('hidden');
+      idsInput.value = checkboxes.map(cb => cb.value).join(',');
+
+      countSpan.textContent =
+        count === 1
+          ? '1 tâche sélectionnée'
+          : count + ' tâches sélectionnées';
+    }
+
+    // on écoute les changements sur toutes les cases
+    document.addEventListener('change', (e) => {
+      if (e.target.classList && e.target.classList.contains('bulk-checkbox')) {
+        refreshBulkBar();
+      }
+    });
+
+    // sécurité : met à jour les ids juste avant envoi
+    form.addEventListener('submit', () => {
+      const checkboxes = Array.from(
+        document.querySelectorAll('.bulk-checkbox:checked')
+      );
+      idsInput.value = checkboxes.map(cb => cb.value).join(',');
+    });
   })();
 </script>
 
