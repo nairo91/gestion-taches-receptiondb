@@ -928,7 +928,7 @@ app.post('/interventions/:id/status', async (req, res) => {
 
 // --- Changement de statut en masse (plusieurs interventions) ---
 app.post('/interventions/bulk-status', async (req, res) => {
-  const { new_status, date, persons } = req.body;
+  const { intervention_ids, new_status, date, persons } = req.body;
   const actor = req.session.user;
 
   const allowed = ['a faire', 'en cours', 'terminé'];
@@ -936,24 +936,32 @@ app.post('/interventions/bulk-status', async (req, res) => {
     return res.status(400).send('Statut invalide');
   }
 
-  // IDs des interventions sélectionnées
-  let ids = req.body.ids || [];
-  if (!Array.isArray(ids)) {
-    ids = [ids];
+  let ids = [];
+
+  if (typeof intervention_ids === 'string') {
+    ids = intervention_ids
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
   }
-  ids = ids
-    .map(id => String(id).trim())
-    .filter(id => id.length > 0);
+
+  let idsFromForm = req.body.ids || [];
+  if (!Array.isArray(idsFromForm)) {
+    idsFromForm = idsFromForm ? [idsFromForm] : [];
+  }
+  idsFromForm = idsFromForm
+    .map((id) => String(id).trim())
+    .filter((id) => id.length > 0);
+
+  ids = Array.from(new Set([...ids, ...idsFromForm]));
 
   if (!ids.length) {
-    // rien sélectionné, on revient simplement
     return res.redirect('back');
   }
 
-  // personnes communes
   let personsArray = [];
   if (Array.isArray(persons)) {
-    personsArray = persons.filter(p => p && p.trim().length > 0);
+    personsArray = persons.filter((p) => p && p.trim().length > 0);
   } else if (typeof persons === 'string' && persons.trim().length > 0) {
     personsArray = [persons.trim()];
   }
@@ -961,11 +969,8 @@ app.post('/interventions/bulk-status', async (req, res) => {
   const actorName =
     `${actor?.prenom || ''} ${actor?.nom || ''}`.trim() || actor?.email || '';
 
-  // si personne choisie -> on met l'utilisateur courant
-  if (!personsArray.length) {
-    if (actorName) {
-      personsArray = [actorName];
-    }
+  if (!personsArray.length && actorName) {
+    personsArray = [actorName];
   }
 
   const personsText = personsArray.join(', ');
@@ -979,7 +984,6 @@ app.post('/interventions/bulk-status', async (req, res) => {
     await client.query('BEGIN');
 
     for (const id of ids) {
-      // on verrouille l'intervention
       const currentRes = await client.query(
         'SELECT status, person, action FROM interventions WHERE id = $1 FOR UPDATE',
         [id]
@@ -989,26 +993,23 @@ app.post('/interventions/bulk-status', async (req, res) => {
       }
       const current = currentRes.rows[0];
 
-      // construction de l'event comme dans /interventions/:id/status
       let eventText = '';
-      let newPerson = current.person; // par défaut on garde l'ancien "Qui ?"
+      let newPerson = current.person;
 
       if (new_status === 'a faire') {
         eventText = `Réinitialisé le ${dateText} par ${actorName}`;
       } else if (new_status === 'en cours') {
         eventText = `En cours depuis le ${dateText} (par ${personsText})`;
-        newPerson = personsText; // ceux qui font la tâche
+        newPerson = personsText;
       } else if (new_status === 'terminé' && (!actor || actor.role !== 'admin')) {
-        // validation par la personne connectée (non admin)
         eventText = `Terminé le ${dateText} (validé par ${actorName})`;
-        // on garde newPerson = current.person
       }
 
       const newAction =
         (current.action && current.action.length ? current.action + '\n' : '') +
         eventText;
 
-      // mise à jour de l'intervention
+
       await client.query(
         `
         UPDATE interventions
@@ -1020,7 +1021,6 @@ app.post('/interventions/bulk-status', async (req, res) => {
         [new_status, newPerson, newAction, id]
       );
 
-      // écriture dans l'historique
       await client.query(
         `
         INSERT INTO intervention_history (
