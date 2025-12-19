@@ -558,12 +558,52 @@ app.post('/chantiers', requireAdmin, async (req, res) => {
   }
 
   const trimmed = name.trim();
+  const client = await receptionPool.connect();
 
-  await receptionPool.query(
-    `INSERT INTO chantiers (nom, name, created_at)
-     VALUES ($1, $1, now())`,
-    [trimmed]
-  );
+  try {
+    await client.query('BEGIN');
+
+    const chantierRes = await client.query(
+      `INSERT INTO chantiers (nom, name, created_at)
+       VALUES ($1, $1, now())
+       RETURNING id`,
+      [trimmed]
+    );
+
+    const chantierId = chantierRes.rows[0].id;
+    const defaultFloors = Array.from({ length: 6 }).map((_, idx) => ({
+      name: `R+${idx}`,
+      index: idx,
+    }));
+
+    for (const floor of defaultFloors) {
+      const floorRes = await client.query(
+        `INSERT INTO floors (name, chantier_id)
+         VALUES ($1, $2)
+         RETURNING id`,
+        [floor.name, chantierId]
+      );
+
+      const floorId = floorRes.rows[0].id;
+      const startNumber = floor.index === 0 ? 0 : floor.index * 100;
+      const endNumber = floor.index === 0 ? 26 : floor.index * 100 + 60;
+
+      for (let num = startNumber; num <= endNumber; num++) {
+        const roomName = String(num).padStart(3, '0');
+        await client.query(
+          `INSERT INTO rooms (name, floor_id) VALUES ($1, $2)`,
+          [roomName, floorId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    console.error(err);
+    await client.query('ROLLBACK');
+  } finally {
+    client.release();
+  }
 
   res.redirect('/');
 });
@@ -1475,28 +1515,52 @@ app.post('/chantiers/:chantierId/interventions', async (req, res) => {
 
 // Formulaire d'import Excel
 app.get('/import', async (req, res) => {
-  const result = await receptionPool.query(
-    `
-    SELECT id,
-           CASE
-             WHEN nom IS NOT NULL AND nom <> '' THEN nom
-             ELSE name
-           END AS display_name
-    FROM chantiers
-    ORDER BY created_at DESC, id DESC
-    `
-  );
+  const chantiers = (
+    await receptionPool.query(
+      `
+      SELECT id,
+             CASE
+               WHEN nom IS NOT NULL AND nom <> '' THEN nom
+               ELSE name
+             END AS display_name
+      FROM chantiers
+      ORDER BY created_at DESC, id DESC
+      `
+    )
+  ).rows;
+
+  const floors = (
+    await receptionPool.query(
+      `SELECT id, name, chantier_id FROM floors ORDER BY chantier_id, name`
+    )
+  ).rows;
+
+  const rooms = (
+    await receptionPool.query(
+      `
+      SELECT r.id, r.name, r.floor_id, f.chantier_id
+      FROM rooms r
+      JOIN floors f ON r.floor_id = f.id
+      ORDER BY f.chantier_id, f.name, r.name
+      `
+    )
+  ).rows;
 
   res.render('import', {
-    chantiers: result.rows,
+    chantiers,
+    floors,
+    rooms,
+    selected: { chantierId: null, floorId: null, roomId: null },
     message: null,
     error: null,
   });
 });
 
-// Traitement de l'import Excel : alimente le catalogue LOT / Tâche POUR UN CHANTIER
+// Traitement de l'import Excel : crée des interventions sur une chambre d'un chantier
 app.post('/import', upload.single('fichier'), async (req, res) => {
   const chantierId = req.body.chantier_id;
+  const floorId = req.body.floor_id;
+  const roomId = req.body.room_id;
   const filePath = req.file ? req.file.path : null;
 
   const chantiers = (
@@ -1513,12 +1577,41 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     )
   ).rows;
 
-  if (!chantierId || !filePath) {
-    return res.status(400).render('import', {
+  const floors = (
+    await receptionPool.query(
+      `SELECT id, name, chantier_id FROM floors ORDER BY chantier_id, name`
+    )
+  ).rows;
+
+  const rooms = (
+    await receptionPool.query(
+      `
+      SELECT r.id, r.name, r.floor_id, f.chantier_id
+      FROM rooms r
+      JOIN floors f ON r.floor_id = f.id
+      ORDER BY f.chantier_id, f.name, r.name
+      `
+    )
+  ).rows;
+
+  const renderWithError = (errorMessage) =>
+    res.status(400).render('import', {
       chantiers,
+      floors,
+      rooms,
+      selected: {
+        chantierId,
+        floorId,
+        roomId,
+      },
       message: null,
-      error: 'Merci de sélectionner un chantier et un fichier.',
+      error: errorMessage,
     });
+
+  if (!chantierId || !filePath || !floorId || !roomId) {
+    return renderWithError(
+      'Merci de sélectionner un chantier, un étage, une chambre et un fichier.'
+    );
   }
 
   const workbook = new ExcelJS.Workbook();
@@ -1528,6 +1621,13 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     console.error(e);
     return res.status(500).render('import', {
       chantiers,
+      floors,
+      rooms,
+      selected: {
+        chantierId,
+        floorId,
+        roomId,
+      },
       message: null,
       error: 'Impossible de lire le fichier Excel.',
     });
@@ -1565,26 +1665,62 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
   const client = await receptionPool.connect();
   let inserted = 0;
+  const user = req.session.user;
+  let floor = null;
+  let room = null;
 
   try {
     await client.query('BEGIN');
 
-    // on efface le catalogue du chantier pour repartir propre
-    await client.query(
-      'DELETE FROM chantier_lot_tasks WHERE chantier_id = $1',
-      [chantierId]
+    const floorRes = await client.query(
+      'SELECT id, name FROM floors WHERE id = $1 AND chantier_id = $2',
+      [floorId, chantierId]
     );
+
+    if (!floorRes.rows.length) {
+      await client.query('ROLLBACK');
+      return renderWithError("Étage invalide pour ce chantier.");
+    }
+
+    const roomRes = await client.query(
+      `
+      SELECT r.id, r.name
+      FROM rooms r
+      JOIN floors f ON r.floor_id = f.id
+      WHERE r.id = $1 AND r.floor_id = $2 AND f.chantier_id = $3
+      `,
+      [roomId, floorId, chantierId]
+    );
+
+    if (!roomRes.rows.length) {
+      await client.query('ROLLBACK');
+      return renderWithError("Chambre invalide pour cet étage.");
+    }
+
+    floor = floorRes.rows[0];
+    room = roomRes.rows[0];
 
     for (const key of pairs) {
       const [lot, task] = key.split('|||');
 
       await client.query(
         `
-        INSERT INTO chantier_lot_tasks (chantier_id, lot, task)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (chantier_id, lot, task) DO NOTHING
+        INSERT INTO interventions (
+          user_id, old_floor_name, old_room_name,
+          lot, task, created_at, status, person, action,
+          floor_id, room_id
+        )
+        VALUES ($1, $2, $3, $4, $5, now(), 'a faire', '', 'Import Excel', $6, $7)
         `,
-        [chantierId, lot, task]
+        [
+          user.email,
+          floor.name,
+          room.name,
+          lot,
+          task,
+          floor.id,
+          room.id,
+        ]
       );
       inserted++;
     }
@@ -1595,6 +1731,13 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
     await client.query('ROLLBACK');
     return res.status(500).render('import', {
       chantiers,
+      floors,
+      rooms,
+      selected: {
+        chantierId,
+        floorId,
+        roomId,
+      },
       message: null,
       error: "Erreur pendant l'import des LOTs / Tâches (voir logs serveur).",
     });
@@ -1612,7 +1755,14 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
   return res.render('import', {
     chantiers,
-    message: `Import terminé : ${inserted} couples LOT / Tâche enregistrés${chantierInfo}.`,
+    floors,
+    rooms,
+    selected: {
+      chantierId,
+      floorId,
+      roomId,
+    },
+    message: `Import terminé : ${inserted} interventions créées${chantierInfo} (étage ${floor.name}, chambre ${room.name}).`,
     error: null,
   });
 });
