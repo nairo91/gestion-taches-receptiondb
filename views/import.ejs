@@ -32,11 +32,23 @@
 
         <form method="post" action="/import" enctype="multipart/form-data" class="import-form">
           <label>Chantier
-            <select name="chantier_id" required>
+            <select name="chantier_id" id="chantierSelect" required>
               <option value="">-- Choisir un chantier --</option>
               <% chantiers.forEach(c => { %>
-                <option value="<%= c.id %>"><%= c.display_name %> (#<%= c.id %>)</option>
+                <option value="<%= c.id %>" <%= selected && String(selected.chantierId) === String(c.id) ? 'selected' : '' %>><%= c.display_name %> (#<%= c.id %>)</option>
               <% }) %>
+            </select>
+          </label>
+
+          <label>Étage
+            <select name="floor_id" id="floorSelect" required>
+              <option value="">-- Choisir un étage --</option>
+            </select>
+          </label>
+
+          <label>Chambre
+            <select name="room_id" id="roomSelect" required>
+              <option value="">-- Choisir une chambre --</option>
             </select>
           </label>
 
@@ -49,12 +61,77 @@
   <li><strong>A</strong> : LOT (peut être vide, on reprend le dernier LOT non vide)</li>
   <li><strong>B</strong> : Tâche (désignation)</li>
 </ul>
-<p>Les couples LOT / Tâche seront ajoutés au catalogue commun.</p>
+<p>Chaque couple LOT / Tâche sera créé comme intervention <strong>dans la chambre sélectionnée</strong> avec le statut « à faire ».</p>
 
 
           <button type="submit" class="btn">Importer</button>
         </form>
       </section>
     </main>
+
+    <script>
+      const allFloors = <%- JSON.stringify(floors || []) %>;
+      const allRooms = <%- JSON.stringify(rooms || []) %>;
+      const selected = {
+        chantierId: "<%= selected?.chantierId || '' %>",
+        floorId: "<%= selected?.floorId || '' %>",
+        roomId: "<%= selected?.roomId || '' %>"
+      };
+
+      const chantierSelect = document.getElementById('chantierSelect');
+      const floorSelect = document.getElementById('floorSelect');
+      const roomSelect = document.getElementById('roomSelect');
+
+      function populateFloors(chantierId) {
+        floorSelect.innerHTML = '<option value="">-- Choisir un étage --</option>';
+        const floorsForChantier = allFloors.filter(f => String(f.chantier_id) === String(chantierId));
+        floorsForChantier.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.textContent = f.name;
+          if (selected.floorId && String(selected.floorId) === String(f.id)) {
+            opt.selected = true;
+          }
+          floorSelect.appendChild(opt);
+        });
+      }
+
+      function populateRooms(floorId) {
+        roomSelect.innerHTML = '<option value="">-- Choisir une chambre --</option>';
+        const roomsForFloor = allRooms.filter(r => String(r.floor_id) === String(floorId));
+        roomsForFloor.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r.id;
+          opt.textContent = r.name;
+          if (selected.roomId && String(selected.roomId) === String(r.id)) {
+            opt.selected = true;
+          }
+          roomSelect.appendChild(opt);
+        });
+      }
+
+      chantierSelect.addEventListener('change', (e) => {
+        selected.chantierId = e.target.value;
+        selected.floorId = '';
+        selected.roomId = '';
+        populateFloors(selected.chantierId);
+        populateRooms('');
+      });
+
+      floorSelect.addEventListener('change', (e) => {
+        selected.floorId = e.target.value;
+        selected.roomId = '';
+        populateRooms(selected.floorId);
+      });
+
+      roomSelect.addEventListener('change', (e) => {
+        selected.roomId = e.target.value;
+      });
+
+      if (selected.chantierId) {
+        populateFloors(selected.chantierId);
+        populateRooms(selected.floorId);
+      }
+    </script>
   </body>
 </html>
