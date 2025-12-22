@@ -586,7 +586,7 @@ app.post('/chantiers', requireAdmin, async (req, res) => {
 
       const floorId = floorRes.rows[0].id;
       const startNumber = floor.index === 0 ? 0 : floor.index * 100;
-      const endNumber = floor.index === 0 ? 26 : floor.index * 100 + 60;
+      const endNumber = floor.index === 0 ? 26 : floor.index * 100 + 26;
 
       for (let num = startNumber; num <= endNumber; num++) {
         const roomName = String(num).padStart(3, '0');
