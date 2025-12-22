@@ -17,6 +17,14 @@
     </header>
 
     <main class="page-shell">
+      <% const formatDateFr = date => {
+           if (!date) return '';
+           const d = new Date(date);
+           const day = String(d.getDate()).padStart(2, '0');
+           const month = String(d.getMonth() + 1).padStart(2, '0');
+           const year = d.getFullYear();
+           return `${day}-${month}-${year}`;
+         }; %>
       <section class="card">
         <div class="section-heading with-actions">
           <a href="/" class="btn btn-secondary">← Retour aux chantiers</a>
@@ -156,7 +164,7 @@
         <small class="action-text"><%= (i.action || '').split('\n').slice(-1)[0] || '' %></small>
       </td>
       <td>
-        <%= i.created_at ? i.created_at.toISOString().slice(0,10) : '' %>
+        <%= formatDateFr(i.created_at) %>
       </td>
     </tr>
 
