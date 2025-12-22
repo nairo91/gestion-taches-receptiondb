@@ -11,6 +11,14 @@
     </header>
 
     <main class="page-shell">
+    <% const formatDateFr = date => {
+         if (!date) return '';
+         const d = new Date(date);
+         const day = String(d.getDate()).padStart(2, '0');
+         const month = String(d.getMonth() + 1).padStart(2, '0');
+         const year = d.getFullYear();
+         return `${day}-${month}-${year}`;
+       }; %>
     <section class="card">
   <p>
     Chantier : <strong><%= intervention.chantier_name %></strong><br/>
@@ -20,17 +28,15 @@
     Tâche : <%= intervention.task %><br/>
     Créée le :
     <% if (intervention.created_at) { %>
-      <%= intervention.created_at.toISOString().slice(0,10).split('-').reverse().join('/') %>
+      <%= formatDateFr(intervention.created_at) %>
     <% } else { %>
       -
     <% } %>
   </p>
 
-  <% if (history && history.length) { 
+  <% if (history && history.length) {
        const last = history[history.length - 1];
-       const lastDate = last.created_at
-         ? new Date(last.created_at).toLocaleDateString('fr-FR')
-         : '';
+       const lastDate = formatDateFr(last.created_at);
        const lastType =
          last.event_type === 'creation' ? 'Création' :
          last.event_type === 'status_change' ? 'Changement de statut' :
@@ -77,11 +83,9 @@
             <% } %>
 
             <% history.forEach(h => { %>
-              <% 
-                const createdAt  = h.created_at ? new Date(h.created_at) : null;
-                const dateEvent  = h.date_event ? new Date(h.date_event) : null;
-                const createdFr  = createdAt ? createdAt.toLocaleDateString('fr-FR') : '';
-                const eventFr    = dateEvent ? dateEvent.toLocaleDateString('fr-FR') : '';
+              <%
+                const createdFr  = formatDateFr(h.created_at);
+                const eventFr    = formatDateFr(h.date_event);
               %>
               <tr class="<%= h.event_type === 'edit' ? 'history-row-edit' : '' %>">
                 <td><%= createdFr %></td>
