@@ -88,6 +88,65 @@
       </section>
 
       <section class="card">
+        <div class="section-heading with-actions">
+          <h2>Ajouter une ou plusieurs interventions</h2>
+          <a href="/chantiers/<%= chantier.id %>/lots" class="btn btn-secondary">Appliquer des LOTs du catalogue</a>
+        </div>
+
+        <form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
+          <label>Étage
+            <select name="floor_id" required>
+              <% floors.forEach(f => { %>
+                <option value="<%= f.id %>"><%= f.name %></option>
+              <% }) %>
+            </select>
+          </label>
+
+       <label>Pièces (choix multiple)
+  <div class="multi-dropdown" data-multi-dropdown data-rooms-dropdown>
+    <button type="button" class="multi-dropdown-toggle">
+      Sélectionner les pièces...
+    </button>
+    <div class="multi-dropdown-panel">
+      <% rooms.forEach(r => { %>
+        <label class="multi-dropdown-option" data-room-floor="<%= r.floor_id %>">
+          <input type="checkbox" name="room_ids" value="<%= r.id %>">
+          <span><%= r.floor_name %> - <%= r.name %></span>
+        </label>
+      <% }) %>
+    </div>
+  </div>
+  <span class="help">Choix multiple possible.</span>
+</label>
+
+
+          <label>Lot
+            <select name="lot" required>
+              <option value="">-- Choisir un LOT --</option>
+
+              <% if (typeof catalogueLots !== 'undefined' && catalogueLots && catalogueLots.length) { %>
+                <% catalogueLots.forEach(l => { %>
+                  <option value="<%= l.lot %>"><%= l.lot %></option>
+                <% }) %>
+              <% } else { %>
+                <% lotsOptions.forEach(l => { %>
+                  <option value="<%= l.lot %>"><%= l.lot %></option>
+                <% }) %>
+              <% } %>
+            </select>
+          </label>
+
+          <label>Tâche
+            <select name="task" required>
+              <option value="">-- Choisir un LOT d'abord --</option>
+            </select>
+          </label>
+
+          <button type="submit" class="btn">Créer</button>
+        </form>
+      </section>
+
+      <section class="card">
         <div class="section-heading">
           <h2>Liste des tâches (interventions)</h2>
         </div>
@@ -388,64 +447,6 @@
       </section>
 
       <section class="card">
-        <div class="section-heading with-actions">
-          <h2>Ajouter une ou plusieurs interventions</h2>
-          <a href="/chantiers/<%= chantier.id %>/lots" class="btn btn-secondary">Appliquer des LOTs du catalogue</a>
-        </div>
-
-        <form method="post" action="/chantiers/<%= chantier.id %>/interventions" class="add-task-form">
-          <label>Étage
-            <select name="floor_id" required>
-              <% floors.forEach(f => { %>
-                <option value="<%= f.id %>"><%= f.name %></option>
-              <% }) %>
-            </select>
-          </label>
-
-       <label>Pièces (choix multiple)
-  <div class="multi-dropdown" data-multi-dropdown data-rooms-dropdown>
-    <button type="button" class="multi-dropdown-toggle">
-      Sélectionner les pièces...
-    </button>
-    <div class="multi-dropdown-panel">
-      <% rooms.forEach(r => { %>
-        <label class="multi-dropdown-option" data-room-floor="<%= r.floor_id %>">
-          <input type="checkbox" name="room_ids" value="<%= r.id %>">
-          <span><%= r.floor_name %> - <%= r.name %></span>
-        </label>
-      <% }) %>
-    </div>
-  </div>
-  <span class="help">Choix multiple possible.</span>
-</label>
-
-
-          <label>Lot
-            <select name="lot" required>
-              <option value="">-- Choisir un LOT --</option>
-
-              <% if (typeof catalogueLots !== 'undefined' && catalogueLots && catalogueLots.length) { %>
-                <% catalogueLots.forEach(l => { %>
-                  <option value="<%= l.lot %>"><%= l.lot %></option>
-                <% }) %>
-              <% } else { %>
-                <% lotsOptions.forEach(l => { %>
-                  <option value="<%= l.lot %>"><%= l.lot %></option>
-                <% }) %>
-              <% } %>
-            </select>
-          </label>
-
-          <label>Tâche
-            <select name="task" required>
-              <option value="">-- Choisir un LOT d'abord --</option>
-            </select>
-          </label>
-
-          <button type="submit" class="btn">Créer</button>
-        </form>
-      </section>
-
       <!-- BARRE FLOTTANTE DE MODIFICATION MULTI-TÂCHES -->
       <div id="bulk-bar" class="bulk-bar hidden">
         <form id="bulk-form" method="post" action="/interventions/bulk-status">
