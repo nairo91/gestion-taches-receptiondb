@@ -688,6 +688,10 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     status: req.query.status || '',
   };
 
+  const filterApplied = Object.values(filters).some(
+    (value) => value && String(value).trim() !== ''
+  );
+
   // récupérer le chantier
   const chantierResult = await receptionPool.query(
     `
@@ -726,42 +730,45 @@ app.get('/chantiers/:id/taches', async (req, res) => {
   );
   const rooms = roomsResult.rows;
 
-  // interventions filtrées
-  let query = `
-    SELECT i.*,
-           f.name AS floor_name,
-           r.name AS room_name
-    FROM interventions i
-    LEFT JOIN floors f ON i.floor_id = f.id
-    LEFT JOIN rooms r ON i.room_id = r.id
-    WHERE f.chantier_id = $1
-  `;
-  const params = [chantierId];
+  // interventions filtrées (uniquement si un filtre est appliqué)
+  let interventionsResult = { rows: [] };
+  if (filterApplied) {
+    let query = `
+      SELECT i.*,
+             f.name AS floor_name,
+             r.name AS room_name
+      FROM interventions i
+      LEFT JOIN floors f ON i.floor_id = f.id
+      LEFT JOIN rooms r ON i.room_id = r.id
+      WHERE f.chantier_id = $1
+    `;
+    const params = [chantierId];
 
-  if (filters.floor) {
-    params.push(filters.floor);
-    query += ` AND f.id = $${params.length}`;
-  }
-  if (filters.room) {
-    params.push(filters.room);
-    query += ` AND r.id = $${params.length}`;
-  }
-  if (filters.lot) {
-    params.push(filters.lot);
-    query += ` AND i.lot = $${params.length}`;
-  }
-  if (filters.task) {
-    params.push(filters.task);
-    query += ` AND i.task = $${params.length}`;
-  }
-  if (filters.status) {
-    params.push(filters.status);
-    query += ` AND i.status = $${params.length}`;
-  }
+    if (filters.floor) {
+      params.push(filters.floor);
+      query += ` AND f.id = $${params.length}`;
+    }
+    if (filters.room) {
+      params.push(filters.room);
+      query += ` AND r.id = $${params.length}`;
+    }
+    if (filters.lot) {
+      params.push(filters.lot);
+      query += ` AND i.lot = $${params.length}`;
+    }
+    if (filters.task) {
+      params.push(filters.task);
+      query += ` AND i.task = $${params.length}`;
+    }
+    if (filters.status) {
+      params.push(filters.status);
+      query += ` AND i.status = $${params.length}`;
+    }
 
-  query += ` ORDER BY f.name, r.name, i.created_at, i.id`;
+    query += ` ORDER BY f.name, r.name, i.created_at, i.id`;
 
-  const interventionsResult = await receptionPool.query(query, params);
+    interventionsResult = await receptionPool.query(query, params);
+  }
 
    // lots et tâches déjà utilisés (pour les filtres éventuels, si tu veux les garder)
   const lotsResult = await receptionPool.query(
@@ -838,6 +845,7 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     floors,
     rooms,
     filters,
+    filterApplied,
     lotsOptions: lotsResult.rows,
     tasksOptions: tasksResult.rows,
     catalogueLots,
