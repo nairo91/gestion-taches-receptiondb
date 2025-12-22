@@ -160,7 +160,7 @@
         <span class="status-badge <%= statusClass %>"><%= i.status %></span>
       </td>
       <td>
-        <strong><%= i.person || '' %></strong><br />
+        <strong><%= i.display_person || i.person || '' %></strong><br />
         <small class="action-text"><%= (i.action || '').split('\n').slice(-1)[0] || '' %></small>
       </td>
       <td>
