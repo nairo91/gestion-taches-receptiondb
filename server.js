@@ -1705,6 +1705,18 @@ app.post('/import', upload.single('fichier'), async (req, res) => {
 
       await client.query(
         `
+        INSERT INTO chantier_lot_tasks (chantier_id, lot, task)
+        SELECT $1, $2, $3
+        WHERE NOT EXISTS (
+          SELECT 1 FROM chantier_lot_tasks
+          WHERE chantier_id = $1 AND lot = $2 AND task = $3
+        )
+        `,
+        [chantierId, lot, task]
+      );
+
+      await client.query(
+        `
         INSERT INTO interventions (
           user_id, old_floor_name, old_room_name,
           lot, task, created_at, status, person, action,
