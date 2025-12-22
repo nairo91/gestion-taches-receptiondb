@@ -901,20 +901,13 @@ app.post('/interventions/:id/status', async (req, res) => {
   }
 
   // construire la liste de personnes sélectionnées
-  let personsArray = [];
-  if (Array.isArray(persons)) {
-    personsArray = persons.filter((p) => p && p.trim().length > 0);
-  } else if (typeof persons === 'string' && persons.trim().length > 0) {
-    personsArray = [persons.trim()];
-  }
-
   const actorName = `${actor.prenom || ''} ${actor.nom || ''}`.trim() || actor.email;
-
-  // si aucune personne sélectionnée, on met l'utilisateur courant
-  if (!personsArray.length) {
-    personsArray = [actorName];
+  let personsFromForm = [];
+  if (Array.isArray(persons)) {
+    personsFromForm = persons.filter((p) => p && p.trim().length > 0);
+  } else if (typeof persons === 'string' && persons.trim().length > 0) {
+    personsFromForm = [persons.trim()];
   }
-  const personsText = personsArray.join(', ');
 
   const dateText =
     (date && date.trim().length > 0 ? date.trim() : new Date().toISOString().slice(0, 10));
@@ -933,6 +926,23 @@ app.post('/interventions/:id/status', async (req, res) => {
       return res.status(404).send("Intervention introuvable");
     }
     const current = currentRes.rows[0];
+
+    // si aucune personne sélectionnée, on conserve l'existant (sinon l'acteur)
+    let personsArray = [...personsFromForm];
+    const existingPersons = (current.person || '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    if (!personsArray.length && existingPersons.length) {
+      personsArray = existingPersons;
+    }
+
+    if (!personsArray.length && actorName) {
+      personsArray = [actorName];
+    }
+
+    const personsText = personsArray.join(', ');
 
     // on construit la nouvelle phrase d'action
     let eventText = '';
@@ -1037,21 +1047,14 @@ app.post('/interventions/bulk-status', async (req, res) => {
     return res.redirect('back');
   }
 
-  let personsArray = [];
-  if (Array.isArray(persons)) {
-    personsArray = persons.filter((p) => p && p.trim().length > 0);
-  } else if (typeof persons === 'string' && persons.trim().length > 0) {
-    personsArray = [persons.trim()];
-  }
-
   const actorName =
     `${actor?.prenom || ''} ${actor?.nom || ''}`.trim() || actor?.email || '';
-
-  if (!personsArray.length && actorName) {
-    personsArray = [actorName];
+  let personsFromForm = [];
+  if (Array.isArray(persons)) {
+    personsFromForm = persons.filter((p) => p && p.trim().length > 0);
+  } else if (typeof persons === 'string' && persons.trim().length > 0) {
+    personsFromForm = [persons.trim()];
   }
-
-  const personsText = personsArray.join(', ');
   const dateText =
     (date && date.trim().length > 0
       ? date.trim()
@@ -1070,6 +1073,22 @@ app.post('/interventions/bulk-status', async (req, res) => {
         continue;
       }
       const current = currentRes.rows[0];
+
+      let personsArray = [...personsFromForm];
+      const existingPersons = (current.person || '')
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      if (!personsArray.length && existingPersons.length) {
+        personsArray = existingPersons;
+      }
+
+      if (!personsArray.length && actorName) {
+        personsArray = [actorName];
+      }
+
+      const personsText = personsArray.join(', ');
 
       let eventText = '';
       let newPerson = current.person;
