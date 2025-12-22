@@ -754,7 +754,19 @@ app.get('/chantiers/:id/taches', async (req, res) => {
     let query = `
       SELECT i.*,
              f.name AS floor_name,
-             r.name AS room_name
+             r.name AS room_name,
+             COALESCE(
+               (
+                 SELECT ih.persons
+                 FROM intervention_history ih
+                 WHERE ih.intervention_id = i.id
+                   AND ih.persons IS NOT NULL
+                   AND ih.persons <> ''
+                 ORDER BY ih.created_at DESC, ih.id DESC
+                 LIMIT 1
+               ),
+               i.person
+             ) AS display_person
       FROM interventions i
       LEFT JOIN floors f ON i.floor_id = f.id
       LEFT JOIN rooms r ON i.room_id = r.id
