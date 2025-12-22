@@ -105,7 +105,11 @@
   <% if (!interventions.length) { %>
     <tr>
       <td colspan="8" class="empty-state">
-        Aucune intervention pour ce chantier (ou filtre trop restrictif).
+        <% if (filterApplied) { %>
+          Aucune intervention ne correspond aux filtres sélectionnés.
+        <% } else { %>
+          Appliquez au moins un filtre pour afficher les interventions du chantier.
+        <% } %>
       </td>
     </tr>
   <% } %>
