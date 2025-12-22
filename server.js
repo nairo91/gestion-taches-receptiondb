@@ -680,17 +680,35 @@ app.post('/floors/:floorId/rooms', requireAdmin,async (req, res) => {
 
 app.get('/chantiers/:id/taches', async (req, res) => {
   const chantierId = req.params.id;
+
+  // Permet de réinitialiser complètement les filtres mémorisés pour ce chantier
+  if (req.query.reset === '1') {
+    if (req.session.taskFilters && req.session.taskFilters[chantierId]) {
+      delete req.session.taskFilters[chantierId];
+    }
+    return res.redirect(`/chantiers/${chantierId}/taches`);
+  }
+
+  const storedFilters =
+    (req.session.taskFilters && req.session.taskFilters[chantierId]) || {};
+
   const filters = {
-    floor: req.query.floor || '',
-    room: req.query.room || '',
-    lot: req.query.lot || '',
-    task: req.query.task || '',
-    status: req.query.status || '',
+    floor: req.query.floor ?? storedFilters.floor ?? '',
+    room: req.query.room ?? storedFilters.room ?? '',
+    lot: req.query.lot ?? storedFilters.lot ?? '',
+    task: req.query.task ?? storedFilters.task ?? '',
+    status: req.query.status ?? storedFilters.status ?? '',
   };
 
   const filterApplied = Object.values(filters).some(
     (value) => value && String(value).trim() !== ''
   );
+
+  // Mémoriser les filtres appliqués pour les prochaines visites
+  if (filterApplied) {
+    req.session.taskFilters = req.session.taskFilters || {};
+    req.session.taskFilters[chantierId] = filters;
+  }
 
   // récupérer le chantier
   const chantierResult = await receptionPool.query(
@@ -913,11 +931,11 @@ app.post('/interventions/:id/status', async (req, res) => {
     } else if (new_status === 'en cours') {
       eventText = `En cours depuis le ${dateText} (par ${personsText})`;
       newPerson = personsText; // ici on met à jour le "Qui ?" (ceux qui font la tâche)
-    } else if (new_status === 'terminé' && (!actor || actor.role !== 'admin')) {
-  // la validation doit toujours être faite par la personne connectée
-  eventText = `Terminé le ${dateText} (validé par ${actorName})`;
-  // on laisse newPerson = current.person pour garder "qui a fait la tâche"
-}
+    } else if (new_status === 'terminé') {
+      const validator = actorName || personsText || '';
+      eventText = `Terminé le ${dateText} (validé par ${validator})`;
+      // on laisse newPerson = current.person pour garder "qui a fait la tâche"
+    }
 
     const newAction =
       (current.action && current.action.length ? current.action + '\n' : '') + eventText;
@@ -1049,8 +1067,9 @@ app.post('/interventions/bulk-status', async (req, res) => {
       } else if (new_status === 'en cours') {
         eventText = `En cours depuis le ${dateText} (par ${personsText})`;
         newPerson = personsText;
-      } else if (new_status === 'terminé' && (!actor || actor.role !== 'admin')) {
-        eventText = `Terminé le ${dateText} (validé par ${actorName})`;
+      } else if (new_status === 'terminé') {
+        const validator = actorName || personsText || '';
+        eventText = `Terminé le ${dateText} (validé par ${validator})`;
       }
 
       const newAction =
